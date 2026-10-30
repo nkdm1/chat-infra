@@ -1,5 +1,5 @@
-include "env_config" {
-  path = find_in_parent_folders("terragrunt.hcl")
+include "root" {
+  path = find_in_parent_folders("root.hcl")
 }
 
 terraform {
@@ -11,3 +11,8 @@ inputs = {
   location = "polandcentral"
   env      = local.env
 }
+
+locals {
+  env = basename(dirname(get_terragrunt_dir()))
+}
+

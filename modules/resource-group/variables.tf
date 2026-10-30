@@ -23,8 +23,12 @@ variable "env" {
 }
 
 variable "tags" {
-  type    = map(string)
-  default = {
+  type = map(string)
+  default = {}
+}
+
+locals {
+  tags = merge(var.tags, {
     env = var.env
-  }
+  })
 }
