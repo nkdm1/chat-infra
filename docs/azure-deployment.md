@@ -19,6 +19,8 @@ Locally it talks to emulators; in Azure it talks to the real services.
 
 ## 2. Create the resources (OpenTofu)
 
+**Hard budget gate:** this project has at most **$100 USD in Azure for Students credits**. This is a ceiling, not a target. Use free resources where eligible and otherwise the cheapest viable configuration. Verify current remaining credits, regional pricing, subscription eligibility, and full lifecycle cost—including dependent and idle/retained resources—before every plan/apply. Keep a safety margin; cost alerts are not spending caps. Do not provision a change that could reach or exceed the ceiling.
+
 Use **fixed names per environment** (e.g. `chat-dev-cosmos`). Endpoints come from names, so URLs survive destroy/recreate.
 
 - **Cosmos DB**: database `chat`, container `messages`, partition key `/conversationId`, default indexing.
@@ -86,7 +88,7 @@ The app validates all config on startup and refuses to start if something is mis
 2. Migrate the DB: run the `migrator` image target once as a Kubernetes Job (same `DATABASE_URL`).
 3. Deploy the app: a Deployment with `serviceAccountName: chat-app`, the label `azure.workload.identity/use: "true"`, `envFrom` the ConfigMap + Secret, port 3000.
    - Liveness probe: `GET /api/health`. Readiness probe: `GET /api/ready`.
-4. Ingress with TLS on your domain. The domain must equal `BETTER_AUTH_URL`.
+4. Install an AKS-compatible Gateway API controller and configure `GatewayClass`, `Gateway`, and `HTTPRoute` resources for TLS on your domain. Do not use legacy Kubernetes `Ingress` resources. The controller is required to implement the Gateway API and may provision or use billable Azure networking resources, so choose and cost-review its implementation before deployment. The domain must equal `BETTER_AUTH_URL`.
 5. After a config change: `kubectl rollout restart deployment/chat`.
 
 ## 7. Smoke test

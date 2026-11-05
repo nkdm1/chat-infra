@@ -2,6 +2,8 @@
 
 ## Status and source of truth
 
+**Azure budget constraint:** this project has at most **$100 USD in Azure for Students credits**. This is a hard ceiling. Every Azure resource must be free when eligible or use the cheapest viable configuration. Verify current eligibility, remaining balance, regional pricing, and full lifecycle/dependency costs before planning or applying; include idle/retained charges and keep a safety margin. Cost alerts are not spending caps. Do not provision a change that could reach or exceed the ceiling.
+
 The chat application has been implemented and runs locally against a Docker Compose service stack. This document records the implemented application architecture and its intended Azure deployment; it is not a proposal to replace the working app with a new frontend/backend split.
 
 For code-level behavior, API routes, security controls, configuration names, and service degradation, see [`architecture.md`](architecture.md). For Azure resource setup and deployment steps, see [`azure-deployment.md`](azure-deployment.md). Keep those documents and this plan aligned when behavior changes.
@@ -47,7 +49,9 @@ The local emulators are provided by `docker-compose.yml` and are accessed throug
 
 ### Selected hosting topology
 
-Deploy the **whole Next.js application (frontend and API together) as one Docker image on AKS**, behind one HTTPS ingress/domain. Azure Static Web Apps (SWA) plus a separate AKS API is not the selected architecture: it would split the app and introduce cross-origin/cookie routing concerns without a need in the implemented application. Do not add an SWA deployment pipeline or separate frontend hosting unless the architecture is deliberately reviewed and the app is changed to support it.
+Deploy the **whole Next.js application (frontend and API together) as one Docker image on AKS**, behind one HTTPS hostname served through a Kubernetes Gateway API controller. Azure Static Web Apps (SWA) plus a separate AKS API is not the selected architecture: it would split the app and introduce cross-origin/cookie routing concerns without a need in the implemented application. Do not add an SWA deployment pipeline or separate frontend hosting unless the architecture is deliberately reviewed and the app is changed to support it.
+
+For new traffic routing, use Gateway API resources (`GatewayClass`, `Gateway`, and `HTTPRoute`) with a compatible controller; do not create legacy Kubernetes `Ingress` resources. The Kubernetes Ingress API is frozen and no longer being developed, but is not formally deprecated or scheduled for removal; Gateway API is the recommended successor. Gateway API resources alone do not implement traffic handling—the controller and its cost must be selected and reviewed separately. See the [Kubernetes Gateway API documentation](https://kubernetes.io/docs/concepts/services-networking/gateway/).
 
 The same-origin host is important for Better Auth cookies, CSRF origin checks, and verification links. Use the public origin as `BETTER_AUTH_URL`. The app has no `NEXT_PUBLIC_*` runtime configuration and the same image should run in every environment.
 

@@ -20,7 +20,16 @@
 - PostgreSQL is queried directly for relationship authorization. There is no Redis permission cache or transactional outbox in the implemented design.
 - Azure runtime secrets belong in Key Vault, mounted using the AKS Secrets Store CSI Driver (synced to a Kubernetes Secret and exposed to the pod at runtime). ConfigMaps are for non-secret settings. Azure SDK-supported services use managed/workload identity where documented; PostgreSQL and Redis credentials remain explicit connection configuration.
 
-## 2. Repository and change boundaries
+## 2. Hard Azure budget constraint
+
+This project uses an Azure for Students subscription with **$100 USD in credits; $100 is a hard ceiling, not a target**. Apply this rule to every resource, environment, and dependency:
+
+- Prefer a genuinely free option when it meets the requirement; otherwise select the cheapest viable region, SKU, capacity, and runtime. Do not add paid availability, redundancy, monitoring retention, NAT, load-balancing, or private networking features without a documented need and cost review.
+- Before adding or applying a resource, verify its current student-subscription eligibility, regional price, quota/free-tier limits, and costs while running, stopped, and retained. Include dependent resources and usage charges such as disks, IPs, load balancers, private endpoints, DNS, logs, backups, and data transfer.
+- Estimate cumulative project spend against the **remaining** student credits, keep a safety margin, and do not plan or apply a change whose plausible cost could reach or exceed the $100 ceiling. Cost alerts are not spending caps. Do not assume a free tier applies without verifying its eligibility and limits.
+- If the cheapest viable design still risks exceeding the remaining credits, stop and ask before provisioning; never silently trade the budget ceiling for availability or convenience.
+
+## 3. Repository and change boundaries
 
 ### Application work
 
@@ -39,7 +48,7 @@ The parent infrastructure directory owns OpenTofu/Terragrunt and Azure infrastru
 
 Do not implement application product behavior in infrastructure code. Do not alter state, destroy resources, change production identity/RBAC scope, or apply a high-impact change without explicit human authorization. Keep secrets and credentials out of source, plans, outputs, ConfigMaps, and images.
 
-## 3. Shared application-to-infrastructure contract
+## 4. Shared application-to-infrastructure contract
 
 Use [`../../chat-webapp/.env.example`](../../chat-webapp/.env.example) and [`azure-deployment.md`](azure-deployment.md) as the configuration contract. Preserve these principles:
 
@@ -50,9 +59,9 @@ Use [`../../chat-webapp/.env.example`](../../chat-webapp/.env.example) and [`azu
 - Do not add `NEXT_PUBLIC_*` settings. The same Docker image must run across environments; configuration is supplied at runtime.
 - Use workload identity for supported Azure services and the CSI driver's Key Vault access. Scope service roles to the required resource/data plane. Follow the deployment document's explicit identity and role table rather than inventing broader access.
 - PostgreSQL and Redis authentication/network access are configured explicitly; do not assume Azure SDK managed identity automatically authenticates generic protocol clients.
-- The public ingress domain must match `BETTER_AUTH_URL`; keep browser and API same-origin.
+- The public Gateway API hostname must match `BETTER_AUTH_URL`; keep browser and API same-origin. For new traffic routing, use an AKS-compatible Gateway API controller with `GatewayClass`, `Gateway`, and `HTTPRoute`, not legacy Kubernetes `Ingress` resources. The Ingress API is frozen (not formally deprecated); the controller implementation and cost must be reviewed.
 
-## 4. Workstream A — application maintenance
+## 5. Workstream A — application maintenance
 
 The application is already implemented. Treat this section as rules for incremental maintenance, not a checklist to rebuild features.
 
@@ -65,7 +74,7 @@ The application is already implemented. Treat this section as rules for incremen
 
 **Application acceptance:** applicable tests/checks pass; local Compose or `pnpm dev` workflow remains usable; runtime configuration remains documented; no unsupported architecture is described as implemented.
 
-## 5. Workstream B — complete the Azure deployment
+## 6. Workstream B — complete the Azure deployment
 
 The intended deployment is documented in [`azure-deployment.md`](azure-deployment.md). Build out the missing infrastructure to match it; do not substitute SWA or split frontend/backend hosting.
 
@@ -88,22 +97,22 @@ The intended deployment is documented in [`azure-deployment.md`](azure-deploymen
 1. Build the Docker `runner` target and publish one immutable/versioned image to ACR. The image contains both Next.js UI and API and listens on port 3000.
 2. Run the `migrator` target as a one-shot Kubernetes Job with the same database configuration before updating the app Deployment. Do not run schema migrations as an uncontrolled parallel startup action.
 3. Deploy one AKS application Deployment using the workload-identity service account, Key Vault CSI mount/Secret, `chat-config`, and runtime configuration. Configure liveness `GET /api/health` and readiness `GET /api/ready`.
-4. Route one HTTPS domain to the app. Set `BETTER_AUTH_URL` to that exact origin and retain same-origin API/cookie behavior.
+4. Install a cost-reviewed Gateway API controller and route one HTTPS domain to the app using `GatewayClass`, `Gateway`, and `HTTPRoute` resources. Do not create legacy Kubernetes `Ingress` resources. Set `BETTER_AUTH_URL` to that exact origin and retain same-origin API/cookie behavior.
 5. Application rollout is an explicit operational step; do not claim CI/CD or automated deployment exists unless it is implemented and documented. Do not add an SWA workflow for this topology.
 
 **Azure acceptance:** reviewed infrastructure plan matches the documented service/identity topology; no secrets appear in state outputs, logs, ConfigMaps, image, or source; the app starts with runtime configuration only; migrations complete; readiness and the documented registration, messaging, attachment, and realtime smoke tests pass.
 
-## 6. Cross-workstream rollout order
+## 7. Cross-workstream rollout order
 
 1. Confirm the application/configuration contract and current cloud resource state.
 2. Build out the isolated dev Azure foundation and runtime identity/secrets path.
 3. Verify network access and service roles; manually complete ACS sender-domain verification where required.
 4. Build/push the unified app image; apply database migrations as a one-off job.
-5. Deploy the single Next.js app to AKS behind the same-origin HTTPS ingress.
+5. Deploy the single Next.js app to AKS behind the same-origin HTTPS Gateway API route.
 6. Smoke-test sign-up and Mailpit locally / ACS in Azure, login, friend flows, messages and history, realtime receive plus polling fallback, attachments, readiness, and admin flows.
 7. Update both implementation docs and this guide for any accepted behavior or deployment changes.
 
-## 7. Global agent rules
+## 8. Global agent rules
 
 - Keep changes scoped and inspect before editing. Report changed files, checks run, and blockers.
 - Treat `architecture.md` and `azure-deployment.md` in this directory as the application behavior and Azure deployment reference; do not leave planning documents contradicting them.
