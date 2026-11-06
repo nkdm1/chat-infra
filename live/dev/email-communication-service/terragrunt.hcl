@@ -10,17 +10,13 @@ locals {
   env = basename(dirname(get_terragrunt_dir()))
 }
 
-dependencies {
-  paths = ["../resource-group"]
+dependency "resource_group" {
+  config_path = "../resource-group"
 }
 
 inputs = {
   name                = "chat-${local.env}-email"
-  resource_group_name = "chat-${local.env}-rg"
+  resource_group_name = dependency.resource_group.outputs.name
   data_location       = "Europe"
   env                 = local.env
-
-  tags = {
-    project = "azure-chat-webapp"
-  }
 }

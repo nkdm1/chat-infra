@@ -14,19 +14,24 @@ dependency "network" {
   config_path = "../network"
 }
 
-dependencies {
-  paths = ["../resource-group", "../container-registry"]
+dependency "container_registry" {
+  config_path = "../container-registry"
 }
+
+dependency "resource_group" {
+  config_path = "../resource-group"
+}
+
 
 inputs = {
   aks_name            = "chat-${local.env}-aks"
   location            = "polandcentral"
-  resource_group_name = "chat-${local.env}-rg"
+  resource_group_name = dependency.resource_group.outputs.name
   dns_prefix          = "chat-${local.env}-aks"
   aks_subnet_id       = dependency.network.outputs.aks_subnet_id
 
-  # TODO: add acr to modules
-  acr_id = get_env("ACR_ID")
+  # TODO: sub with real acr_id after container_registry is created
+  acr_id = dependency.container_registry.outputs.acr_id
 
   node_vm_size   = "Standard_D2als_v7"
   node_min_count = 1

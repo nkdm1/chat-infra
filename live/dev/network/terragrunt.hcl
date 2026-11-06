@@ -10,13 +10,13 @@ locals {
   env = basename(dirname(get_terragrunt_dir()))
 }
 
-dependencies {
-  paths = ["../resource-group"]
+dependency "resource_group" {
+  config_path = "../resource-group"
 }
 
 inputs = {
   location            = "polandcentral"
-  resource_group_name = "chat-${local.env}-rg"
+  resource_group_name = dependency.resource_group.outputs.name
 
   vnet_name               = "chat-${local.env}-vnet"
   vnet_address_space      = ["10.1.0.0/16"]
