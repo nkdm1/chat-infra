@@ -2,3 +2,7 @@
 .env*
 .terragrunt-cache/
 .terraform.lock.hcl
+*.png
+
+# Python virtual environment
+.venv/
