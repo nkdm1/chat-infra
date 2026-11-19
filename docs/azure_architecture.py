@@ -17,6 +17,7 @@ from diagrams.azure.database import CosmosDb, DatabaseForPostgresqlServers
 from diagrams.azure.identity import ManagedIdentities
 from diagrams.azure.devops import Pipelines
 from diagrams.azure.integration import APIConnections
+from diagrams.azure.monitor import Monitor
 from diagrams.azure.security import KeyVaults
 from diagrams.azure.storage import BlobStorage
 from diagrams.k8s.compute import Pod
@@ -153,6 +154,10 @@ with RoutedDiagram(
 
     pipeline = service(Pipelines, "pipeline to be designed", 290, -70)
     pipeline_target = anchor("pipeline_target", 290, 80)
+
+    # docs/TODO.md plans monitoring (logs, diagnostics, alerts, retention), but
+    # coverage and implementation are undecided. Do not imply wired telemetry.
+    monitoring = service(Monitor, "Azure Monitor\n", 640, 780)
 
     with group("Azure data and application services", (740, 250, 1490, 880)):
         with group("data storage", (810, 470, 1470, 835), background="#dbeaf5"):
