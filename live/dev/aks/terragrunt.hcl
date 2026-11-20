@@ -30,8 +30,7 @@ inputs = {
   dns_prefix          = "chat-${local.env}-aks"
   aks_subnet_id       = dependency.network.outputs.aks_subnet_id
 
-  # TODO: sub with real acr_id after container_registry is created
-  acr_id = dependency.container_registry.outputs.acr_id
+  acr_id = dependency.container_registry.outputs.id
 
   node_vm_size   = "Standard_D2als_v7"
   node_min_count = 1
