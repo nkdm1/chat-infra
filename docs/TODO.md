@@ -35,6 +35,9 @@ Create one `live/prod/<stack>/terragrunt.hcl` per module, using the same reusabl
 | 12 | `aks` *(new)* | AKS, node pools/autoscaling, OIDC/workload identity, Key Vault CSI provider, ACR pull, monitoring, and a cost-reviewed Gateway API controller for HTTPS (`GatewayClass`, `Gateway`, `HTTPRoute`; no legacy `Ingress` resources). |
 | 13 | `workload-identity` *(new)* | App identity, federated credential for `chat/chat-app`, and least-privilege roles for Cosmos, Blob, Web PubSub, ACS Email, and the CSI secret reader. |
 
+- [ ] Create separate app workload identities for dev and prod after each AKS cluster has OIDC/workload identity enabled. Federate each identity to the `chat/chat-app` Kubernetes ServiceAccount, pass its principal ID to that environment's Cosmos stack, and verify its data-plane role assignment grants access only to that environment's database.
+- [ ] For the shared Cosmos account, once the AKS VNet, private-endpoint subnet, and private DNS are ready, create and validate the private endpoint from an AKS pod; only then set `public_network_access_enabled = false`. Do not disable public access before private connectivity and DNS are confirmed. Include the endpoint and DNS costs in the pre-apply budget check.
+
 Build the modules in this order. Apply them in the same dependency order: resource group → network/monitoring → ACR/Key Vault → data services/email → AKS → workload identity/roles. Independent data-service stacks can be applied in parallel after the network is ready.
 
 ## 3. Showcase configuration and deployment
