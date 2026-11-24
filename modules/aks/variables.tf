@@ -18,6 +18,16 @@ variable "dns_prefix" {
   description = "DNS prefix for the AKS-managed Kubernetes API endpoint."
 }
 
+variable "virtual_network_id" {
+  description = "VNet on which the AKS control-plane identity needs network access."
+  type        = string
+}
+
+variable "gateway_public_ip_id" {
+  description = "Network-owned public IP reserved for the Gateway."
+  type        = string
+}
+
 variable "aks_subnet_id" {
   type        = string
   description = "Resource ID of the dedicated VNet subnet for AKS nodes."
