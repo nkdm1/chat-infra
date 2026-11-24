@@ -7,7 +7,7 @@ resource "azurerm_cosmosdb_account" "this" {
 
   free_tier_enabled                = var.free_tier_enabled
   multiple_write_locations_enabled = false
-  public_network_access_enabled    = true
+  public_network_access_enabled    = false
 
   consistency_policy {
     consistency_level = "Session"

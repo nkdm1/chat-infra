@@ -11,6 +11,7 @@
 - `live/dev/resource-group`
 - `live/dev/network`
 - `live/dev/cosmos-db`
+- `live/dev/cosmos-private-endpoint`
 - `live/dev/email-communication-service`
 - `live/dev/aks`
 - `live/dev/workload-identity`
@@ -23,7 +24,7 @@ There is no `live/prod/` environment yet. These paths show intended configuratio
 
 ### Checked-in module directories
 
-`aks`, `blob-storage`, `container-registry`, `cosmos-db-account`, `cosmos-db-namespace`, `email-communication-service`, `network`, `resource-group`, `workload-identity`, and `workload-federation`.
+`aks`, `blob-storage`, `container-registry`, `cosmos-db-account`, `cosmos-db-namespace`, `email-communication-service`, `network`, `private-endpoint`, `resource-group`, `workload-identity`, and `workload-federation`.
 
 Module directories are not equivalent to complete modules, environment stacks, or applied resources. Review the older `modules/cosmosdb` against the account/namespace modules before using it.
 
@@ -31,12 +32,12 @@ Module directories are not equivalent to complete modules, environment stacks, o
 
 - `live/root.hcl` configures an Azure remote-state backend and requires an explicit, UUID-formatted `ARM_SUBSCRIPTION_ID` for both the backend and provider. The backend's existence, access, location, and charges have not been verified.
 - Regional resource groups, VNet, AKS, ACR, and Cosmos account use `polandcentral`; keep that region unless service/SKU availability or cost blocks it.
-- `live/dev/network` creates a VNet, an AKS subnet, and a reserved private-endpoint subnet. It does not yet create private endpoints or private DNS links.
+- `live/dev/network` creates a VNet, an AKS subnet, and a private-endpoint subnet. The dev Cosmos private endpoint stack configures a private DNS zone and VNet link; it has not been deployed or tested.
 - The AKS module configures a private API server, AKS-managed private DNS, no public API FQDN, and Run Command enabled. This configuration has not been applied or tested. It uses a Free management tier, `Standard_D2als_v7` nodes with autoscaling min 1/max 2, workload identity/OIDC, and Key Vault CSI support.
 - The shared ACR stack configures Basic registry `websecchatacr`, a public endpoint, and the admin account disabled. Basic does not support anonymous pulls. The GitHub OIDC publisher and full Entra-only access policy remain to be implemented and verified; the dev AKS configuration grants its kubelet `AcrPull`. The shared stack uses a different state key than the former dev stack; inspect/migrate any existing state explicitly rather than assuming a path move migrates it.
 - The shared Cosmos account has free tier enabled. Dev's `live/dev/cosmos-db` uses database `chat-dev`, container `messages`, provisioned throughput `400`, and configures a database-scoped Cosmos data-plane role for the dev workload identity. The identity and AKS federation are separate stacks so they survive cluster replacement independently. None of this has been deployed or access-tested.
 - The dev ACS stack currently creates an Email Communication Service resource. A verified sender/domain and complete email configuration are not represented by the current stack. ACS has no traditional Private Link endpoint; use authenticated outbound calls and consider Network Security Perimeter only if the subscription supports it without unacceptable preview risk.
-- Dev has no Terragrunt stacks yet for PostgreSQL, Blob Storage, Key Vault, Azure Managed Redis, or Web PubSub. No private endpoints/DNS, Gateway API controller/route, or `live/prod/` stacks were found.
+- Dev has no Terragrunt stacks yet for PostgreSQL, Blob Storage, Key Vault, Azure Managed Redis, or Web PubSub. Other data-service private endpoints/DNS, a Gateway API controller/route, and `live/prod/` stacks are still missing.
 - The `chat-webapp` repo has one GitHub Actions CI workflow for checks/tests; no image-publish or deployment workflow and no Kubernetes deployment/Gateway manifests were found. The app itself has a Dockerfile and working local Compose/emulator setup.
 - The application code implements Better Auth/PostgreSQL sessions, server-mediated HTTP message writes, PostgreSQL membership authorization, Cosmos persistence, server-to-user Web PubSub events, and Redis/Web PubSub fallbacks. Azure integration has not been runtime-tested in this review.
 
@@ -78,7 +79,7 @@ Module directories are not equivalent to complete modules, environment stacks, o
 ### 2. Complete dev identity and private data services
 
 - [ ] Review/apply existing shared and dev resource-group, network, ACR, Cosmos, ACS, and AKS plans one at a time after the preflight and network design are ready.
-- [ ] Add the shared Cosmos private endpoint and disable public network access. Confirm the account is eligible for free tier and the aggregate `chat-dev` + `chat-prod` throughput and storage stay within allowances.
+- [ ] Validate the configured dev Cosmos private endpoint/DNS and disabled account public access; add a separate prod private path when prod is built. Confirm the account is eligible for free tier and the aggregate `chat-dev` + `chat-prod` throughput and storage stay within allowances.
 - [ ] Verify the configured dev Cosmos data-plane role for the dev workload identity is scoped to `chat-dev` and cannot access prod. The identity and database role are configured but not deployed or tested.
 - [ ] Preserve an independent shared Cosmos account state stack. Implement dev database teardown/recreation so destroying `live/dev/cosmos-db` cannot destroy the shared account or `chat-prod`.
 - [ ] Add private PostgreSQL Flexible Server/database stack and private VNet connectivity; configure TLS, backups/storage, secret-backed credentials, and a tested start/stop/delete/recreate policy.
