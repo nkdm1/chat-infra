@@ -15,7 +15,7 @@ dependency "network" {
 }
 
 dependency "container_registry" {
-  config_path = "../container-registry"
+  config_path = "../../shared/container-registry"
 }
 
 dependency "resource_group" {

@@ -10,11 +10,11 @@
 
 - `live/dev/resource-group`
 - `live/dev/network`
-- `live/dev/container-registry`
 - `live/dev/cosmos-db`
 - `live/dev/email-communication-service`
 - `live/dev/aks`
 - `live/shared/resource-group`
+- `live/shared/container-registry`
 - `live/shared/cosmos-db-account`
 
 There is no `live/prod/` environment yet. These paths show intended configuration only; actual Azure state and spend have not been verified.
@@ -31,7 +31,7 @@ Module directories are not equivalent to complete modules, environment stacks, o
 - Regional resource groups, VNet, AKS, ACR, and Cosmos account use `polandcentral`; keep that region unless service/SKU availability or cost blocks it.
 - `live/dev/network` creates a VNet, an AKS subnet, and a reserved private-endpoint subnet. It does not yet create private endpoints or private DNS links.
 - The AKS module configures a private API server, AKS-managed private DNS, no public API FQDN, and Run Command enabled. This configuration has not been applied or tested. It uses a Free management tier, `Standard_D2als_v7` nodes with autoscaling min 1/max 2, workload identity/OIDC, and Key Vault CSI support.
-- The dev ACR stack uses Basic. Its endpoint is public by default; the module does not define the selected Entra-only access policy or GitHub OIDC publisher.
+- The shared ACR stack configures Basic registry `websecchatacr`, a public endpoint, and the admin account disabled. Basic does not support anonymous pulls. The GitHub OIDC publisher and full Entra-only access policy remain to be implemented and verified; the dev AKS configuration grants its kubelet `AcrPull`. The shared stack uses a different state key than the former dev stack; inspect/migrate any existing state explicitly rather than assuming a path move migrates it.
 - The shared Cosmos account has free tier enabled. Dev's `live/dev/cosmos-db` uses database `chat-dev`, container `messages`, provisioned throughput `400`, and currently passes `app_principal_id = null`. The target is a separate `chat-prod` database and environment-scoped identities/access on the same account.
 - The dev ACS stack currently creates an Email Communication Service resource. A verified sender/domain and complete email configuration are not represented by the current stack. ACS has no traditional Private Link endpoint; use authenticated outbound calls and consider Network Security Perimeter only if the subscription supports it without unacceptable preview risk.
 - Dev has no Terragrunt stacks yet for PostgreSQL, Blob Storage, Key Vault, Azure Managed Redis, or Web PubSub. No private endpoints/DNS, app identity stack, Gateway API controller/route, or `live/prod/` stacks were found.
@@ -101,7 +101,7 @@ Module directories are not equivalent to complete modules, environment stacks, o
 ### 4. Add prod after dev acceptance
 
 - [ ] Require dev end-to-end acceptance, working private networking, tested AKS recreate, stable host/IP behavior, and actual cost observations first.
-- [ ] Create `live/prod/` by reusing the approved modules with distinct resource names, state keys, identity, secrets, app data, and `COSMOS_DATABASE=chat-prod`. Share only the Cosmos account by deliberate choice; use a private endpoint/DNS path for the prod VNet and prod-scoped data access.
+- [ ] Create `live/prod/` by reusing the approved modules with distinct resource names, state keys, identity, secrets, app data, and `COSMOS_DATABASE=chat-prod`. Share the Cosmos account and ACR by deliberate choice; use a private endpoint/DNS path for the prod VNet and prod-scoped data access.
 - [ ] Deploy the public route at `chat.nkdm.io`; keep AKS control plane private and data service public access disabled. Apply the Web PubSub client-connection/server-REST ACL and ACR/ACS identity policies consistently with dev.
 - [ ] Keep prod data services and showcase data between weekly sessions when their measured retained cost fits the remaining $100 credit. Destroy/recreate the stateless prod AKS cluster between sessions. If the budget requires destroying stateful prod resources, record exactly which data will be lost and rebuild procedure before doing so.
 - [ ] Write and test `showcase-start` / `showcase-stop` runbooks. After the showcase, verify actual spend, cluster deletion, PaaS retention, public IP/DNS behavior, and budget margin.

@@ -12,7 +12,7 @@
 - **Cosmos topology:** one shared Cosmos DB account, with isolated `chat-dev` and `chat-prod` databases and environment-specific identities/access. The shared account is not an excuse to share application data or credentials.
 - **Routing and names:** use Gateway API for the public app route. Cloudflare manages DNS: `dev.chat.nkdm.io` is dev; `chat.nkdm.io` is the prod showcase.
 - **Control plane:** AKS Kubernetes API server is private. Operators initially manage the cluster manually with Azure `az aks command invoke` / Run Command, not a public Kubernetes API endpoint.
-- **Registry:** ACR may use its lower-cost public endpoint because GitHub-hosted CI must publish images. Require Entra authentication; disable the admin account and anonymous pulls; grant only CI `AcrPush` and the AKS kubelet `AcrPull`.
+- **Registry:** share one Basic ACR, `websecchatacr`, between dev and prod in `live/shared/`. Its lower-cost public endpoint permits GitHub-hosted CI to publish images. Require Entra authentication; disable the admin account and anonymous pulls; grant only CI `AcrPush` and each AKS kubelet `AcrPull`.
 - **Network boundary:** data services use private networking and have public access disabled where supported. The deliberate exceptions are described under [Network exposure](#network-exposure).
 - **Deployment:** CI tests pull requests; a merge to the default branch builds and publishes an immutable image to ACR using GitHub OIDC. OpenTofu changes and AKS rollouts are reviewed and run manually; merges never auto-apply infrastructure or auto-deploy the app.
 - **Region:** use `polandcentral` for regional resources unless a required service/SKU is unavailable or fails the cost review there. In that case, stop and review the region change before provisioning.
@@ -58,7 +58,7 @@ Internet ── HTTPS ──▶ Cloudflare DNS ──▶ public Gateway API ─�
 
 Use a dedicated `live/dev/` environment and unique Terragrunt state keys. Complete and test dev before creating prod. Keep local Docker Compose as the normal local development path; use real Azure dev resources for cloud integration and end-to-end tests.
 
-The app image is stateless. Environment state, runtime configuration, identities, and data services are separate from the AKS cluster so the cluster can be recreated without losing the retained prod data. Prod uses the proven dev module patterns with distinct names, state, identities, secrets, databases, and app data. The only deliberately shared runtime resource is the Cosmos account.
+The app image is stateless. Environment state, runtime configuration, identities, and data services are separate from the AKS cluster so the cluster can be recreated without losing the retained prod data. Prod uses the proven dev module patterns with distinct names, state, identities, secrets, databases, and app data. The Cosmos account and container registry are deliberately shared; each environment retains its own app data and identity.
 
 ### Cosmos DB
 
@@ -107,7 +107,7 @@ The $100 limit is total project credit, **not a monthly allowance and not $100 p
 
 The desired project state is reached when:
 
-- Dev and prod have separate state, app identities, credentials, and application data; shared Cosmos is the only deliberate shared runtime account.
+- Dev and prod have separate state, app identities, credentials, and application data; the Cosmos account and container registry are deliberately shared.
 - Only the app Gateway and receive-only Web PubSub client connection accept intended public traffic. Data stores use private connectivity/public access disabled. ACR and ACS public endpoint exceptions are identity-restricted as specified above.
 - The app runs as one image on AKS, is reachable at its environment hostname over HTTPS, uses Better Auth sessions, private service endpoints, and server-mediated message writes.
 - Authenticated message writes are persisted before server push; browser Web PubSub credentials are short-lived and receive-only; Redis/Web PubSub outages degrade as the app currently specifies.

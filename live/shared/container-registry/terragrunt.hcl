@@ -15,7 +15,7 @@ dependency "resource_group" {
 }
 
 inputs = {
-  name     = "chat-${local.env}-container-registry"
+  name     = "websecchatacr"
   rg-name  = dependency.resource_group.outputs.name
   location = dependency.resource_group.outputs.location
   env      = local.env

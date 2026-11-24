@@ -1,6 +1,11 @@
 variable "name" {
   description = "Name of the container registry"
   type        = string
+
+  validation {
+    condition     = can(regex("^[a-zA-Z0-9]{5,50}$", var.name))
+    error_message = "Container registry name must be 5–50 alphanumeric characters."
+  }
 }
 
 variable "rg-name" {
