@@ -19,7 +19,7 @@ dependency "resource_group" {
 inputs = {
   name                      = "chat-${local.env}-${local.subscription_suffix}-redis"
   resource_group_name       = dependency.resource_group.outputs.name
-  location                  = "polandcentral"
+  location                  = "spaincentral"
   sku_name                  = "Balanced_B0"
   high_availability_enabled = false
   env                       = local.env

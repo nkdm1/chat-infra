@@ -25,7 +25,7 @@ dependency "network" {
 inputs = {
   name                           = "chat-${local.env}-${local.subscription_suffix}-pg"
   resource_group_name            = dependency.resource_group.outputs.name
-  location                       = "polandcentral"
+  location                       = "spaincentral"
   delegated_subnet_id            = dependency.network.outputs.postgresql_subnet_id
   virtual_network_id             = dependency.network.outputs.virtual_network_id
   private_dns_zone_name          = "chat-${local.env}.postgres.database.azure.com"

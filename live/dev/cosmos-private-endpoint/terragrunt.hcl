@@ -24,7 +24,7 @@ dependency "cosmos" {
 
 inputs = {
   name                  = "chat-${local.env}-cosmos-pe"
-  location              = "polandcentral"
+  location              = "spaincentral"
   resource_group_name   = dependency.resource_group.outputs.name
   subnet_id             = dependency.network.outputs.private_endpoint_subnet_id
   virtual_network_id    = dependency.network.outputs.virtual_network_id

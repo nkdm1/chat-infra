@@ -25,7 +25,7 @@ dependency "resource_group" {
 
 inputs = {
   aks_name             = "chat-${local.env}-aks"
-  location             = "polandcentral"
+  location             = "spaincentral"
   resource_group_name  = dependency.resource_group.outputs.name
   dns_prefix           = "chat-${local.env}-aks"
   aks_subnet_id        = dependency.network.outputs.aks_subnet_id
@@ -35,7 +35,7 @@ inputs = {
 
   acr_id = dependency.container_registry.outputs.id
 
-  node_vm_size   = "Standard_D2als_v7"
+  node_vm_size   = "Standard_D2s_v4"
   node_min_count = 1
   node_max_count = 2
 

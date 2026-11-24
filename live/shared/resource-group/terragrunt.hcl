@@ -12,6 +12,6 @@ locals {
 
 inputs = {
   name     = "chat-shared-rg"
-  location = "polandcentral"
+  location = "spaincentral"
   env      = local.env
 }

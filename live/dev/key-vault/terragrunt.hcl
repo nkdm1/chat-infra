@@ -23,7 +23,7 @@ dependency "workload_identity" {
 inputs = {
   name                       = "chat-${local.env}-${local.subscription_suffix}-kv"
   resource_group_name        = dependency.resource_group.outputs.name
-  location                   = "polandcentral"
+  location                   = "spaincentral"
   app_principal_id           = dependency.workload_identity.outputs.principal_id
   soft_delete_retention_days = 7
   env                        = local.env
