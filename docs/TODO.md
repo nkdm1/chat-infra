@@ -19,6 +19,7 @@
 - `live/dev/postgresql`
 - `live/dev/redis`
 - `live/dev/redis-private-endpoint`
+- `live/dev/pubsub`
 - `live/dev/email-communication-service`
 - `live/dev/aks`
 - `live/dev/workload-identity`
@@ -31,7 +32,7 @@ There is no `live/prod/` environment yet. These paths show intended configuratio
 
 ### Checked-in module directories
 
-`aks`, `blob-storage`, `container-registry`, `cosmos-db-account`, `cosmos-db-namespace`, `email-communication-service`, `key-vault`, `network`, `postgresql`, `private-endpoint`, `redis`, `resource-group`, `workload-identity`, and `workload-federation`.
+`aks`, `blob-storage`, `container-registry`, `cosmos-db-account`, `cosmos-db-namespace`, `email-communication-service`, `key-vault`, `network`, `postgresql`, `private-endpoint`, `pubsub`, `redis`, `resource-group`, `workload-identity`, and `workload-federation`.
 
 Module directories are not equivalent to complete modules, environment stacks, or applied resources. Review the older `modules/cosmosdb` against the account/namespace modules before using it.
 
@@ -48,7 +49,8 @@ Module directories are not equivalent to complete modules, environment stacks, o
 - Dev Key Vault configures RBAC, private networking, a workload secrets-reader role, seven-day soft delete, and no purge protection. Provider settings prevent automatic vault purge/recovery. Secret provisioning, CSI access, and name availability still need validation.
 - Dev PostgreSQL configures a delegated subnet, private DNS, TLS, a `chat` database, and write-only ephemeral administrator password. `POSTGRESQL_SKU` must be selected after availability and cost review; `TF_VAR_administrator_password` must be supplied securely for OpenTofu operations. The application login, private operator access, credentials in Key Vault, lifecycle and backups are not yet tested. Increment the password version input on rotation.
 - Dev Azure Managed Redis configures TLS, key authentication for the app's single `ioredis` connection, private endpoint/DNS, and disabled public access. `REDIS_SKU` and `REDIS_HIGH_AVAILABILITY` require explicit availability/cost review. The provider exports access keys into state even though no key is output; secure state and provision `REDIS_URL` into Key Vault through a private, approved operator path. DNS, connection compatibility, name availability, and lifecycle remain untested.
-- Dev has no Terragrunt stack yet for Web PubSub. Other data-service private endpoints/DNS, a Gateway API controller/route, and `live/prod/` stacks are still missing.
+- Dev Web PubSub configures public client connections, private REST, a private endpoint/DNS and a custom workload role. `WEBPUBSUB_SKU` requires explicit cost/availability review. AzureRM ACL lifecycle, private DNS, token issuance, send, disconnect, and readiness permissions still require live verification. The AzAPI service starts with public REST denied, and the separate AzureRM ACL resource manages network ACLs thereafter; test drift, update and destroy behavior before provisioning.
+- A Gateway API controller/route and `live/prod/` stacks are still missing.
 - The `chat-webapp` repo has one GitHub Actions CI workflow for checks/tests; no image-publish or deployment workflow and no Kubernetes deployment/Gateway manifests were found. The app itself has a Dockerfile and working local Compose/emulator setup.
 - The application code implements Better Auth/PostgreSQL sessions, server-mediated HTTP message writes, PostgreSQL membership authorization, Cosmos persistence, server-to-user Web PubSub events, and Redis/Web PubSub fallbacks. Azure integration has not been runtime-tested in this review.
 
@@ -85,7 +87,7 @@ Module directories are not equivalent to complete modules, environment stacks, o
 - [ ] Validate the network-owned static Gateway and egress IPs and user-assigned NAT Gateway across AKS recreation. Verify no unintended inbound listener, price their idle and active costs, and test control-plane permissions and the Gateway controller's use of the IP.
 - [ ] Keep Cloudflare as DNS provider. Point `dev.chat.nkdm.io` to the dev Gateway and `chat.nkdm.io` to the prod Gateway. Select/test the Cloudflare proxy mode, end-to-end TLS certificate path, DNS updates, and recovery if an IP changes.
 - [ ] Create private DNS zones and VNet links for every private endpoint. Ensure the shared Cosmos account resolves privately from dev and prod VNets.
-- [ ] Restrict public service exposure as recorded in `plan.md`: private PostgreSQL, Cosmos, Blob Storage, Redis, and Key Vault; public Web PubSub `ClientConnection` only for browser WSS plus server REST restricted to fixed AKS egress IP; authenticated public ACR; authenticated outbound ACS Email.
+- [ ] Restrict public service exposure as recorded in `plan.md`: private PostgreSQL, Cosmos, Blob Storage, Redis, and Key Vault; public Web PubSub `ClientConnection` only for browser WSS plus private-endpoint server REST; authenticated public ACR; authenticated outbound ACS Email.
 
 ### 2. Complete dev identity and private data services
 
@@ -97,7 +99,7 @@ Module directories are not equivalent to complete modules, environment stacks, o
 - [ ] Validate the configured private Blob Storage, `attachments` container, private endpoint/DNS, and container-scoped workload role. Verify operator provisioning and data-plane access with public access and Shared Key disabled; check the account name is available.
 - [ ] Select an available/cost-reviewed Redis SKU and HA setting; validate the configured Azure Managed Redis private endpoint/DNS, TLS/key auth and application compatibility; provision `REDIS_URL` privately and test lifecycle. Preserve the app's Redis fallbacks; Redis is not the authorization source of truth.
 - [ ] Validate the configured dev Key Vault private endpoint/DNS, workload identity and CSI access; establish a private operator path to provision secrets. Dev uses 7-day soft delete; purge protection is disabled for both environments by user decision. Choose prod retention before creation.
-- [ ] Add Web PubSub with request-type/network ACLs: public client connections for browser WSS; client credentials only minted by the authenticated API and receive-only; REST API access only from the fixed AKS egress IP; deny other public request types. Verify the chosen tier's connection limits, pricing, and ACL behavior.
+- [ ] Validate the configured Web PubSub public-client/private-REST ACL, private DNS and workload role. Select an available private-endpoint-capable SKU and verify connection limits, pricing, token issuance, send/disconnect/readiness permissions, and ACL behavior during create, drift, update and destroy. The IP allowlist cannot override a public REST request-type deny; the user selected a private endpoint instead.
 - [ ] Add the dev app workload identity/federated Kubernetes service-account credential `chat/chat-app`. Grant only required resource roles; verify Cosmos, Blob, Web PubSub and ACS permissions. Keep CI publish identity, kubelet image-pull identity, and human operator identity separate.
 - [ ] Set Azure configuration from `chat-webapp/.env.example`: `AUTO_PROVISION=false`, no emulator `*_CONNECTION_STRING` values, non-secret settings in ConfigMap, `BETTER_AUTH_SECRET`/`DATABASE_URL`/`REDIS_URL` in Key Vault/CSI, and `COSMOS_DATABASE=chat-dev`.
 - [ ] Finish ACS Email setup and verified sender/domain/DNS. Use the app's workload identity and least-privilege send role. Consider ACS Network Security Perimeter only as optional hardening if the subscription feature and preview terms are acceptable; do not make app delivery depend on it.
