@@ -16,6 +16,12 @@ Read-only queries to the [Azure Retail Prices API](https://learn.microsoft.com/e
 
 Those three example continuous Redis/PostgreSQL/public-IP lines total **$73.01**, before PostgreSQL storage/backups, Private Endpoints, DNS, ACR, AKS nodes, load balancers, logging, egress and the second environment. This is a warning, not a project quote: it assumes neither discounts nor stop/destroy windows. PostgreSQL compute may have a subscription-specific offer; do not assume it applies. A single paid Web PubSub Standard instance retained for 60 days would consume most of the budget by itself, but actual unit billing is time-based and session-only lifecycles must be costed separately.
 
+### Spain Central candidate — not yet selected
+
+The user approved *reviewing* Spain Central; the checked-in region remains Poland Central. Public Retail Prices API observations on 2026-11-24: Linux `Standard_D2s_v4` $0.107/hour; `Standard_D4s_v4` $0.214/hour; Redis Balanced B0 $0.019/hour; PostgreSQL B1MS compute $0.0199/hour; Standard static public IPv4 $0.005/hour. Availability, actual subscription rates, HA/non-HA meter interpretation, quotas and all other meters remain unverified.
+
+For scale only, two D2s_v4 VMs for 64 total hours cost $13.70 compute, excluding disks and all other charges. One retained B0, B1MS compute and two IPs for 60 days total $70.42 before storage, endpoints and other services. These are not a full lifecycle estimate and cannot be added to the Poland Central examples. AKS system-pool requirements and the subscription's 6-vCPU regional / 4-vCPU family quotas conflict with some potential designs; see `docs/TODO.md`. No VM, region or deployment is authorized by these estimates.
+
 ## Required inputs and line items
 
 - [ ] Verify remaining credit, offer-specific benefits, current charges, currency and tax; maintain a safety margin.
