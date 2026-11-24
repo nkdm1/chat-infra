@@ -30,6 +30,7 @@ EOF
 }
 
 locals {
-  subscription_id = get_env("ARM_SUBSCRIPTION_ID", "cf816eae-f4d9-4db4-bfa6-bda71e2cbf68")
+  # Require a non-empty Azure subscription ID rather than falling back to a default.
+  subscription_id = regex("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$", get_env("ARM_SUBSCRIPTION_ID"))
   env             = basename(dirname(path_relative_to_include()))
 }

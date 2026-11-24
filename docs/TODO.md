@@ -1,6 +1,6 @@
 # Infrastructure TODO — current state and remaining work
 
-> **Snapshot:** checked-in configuration reviewed at infra commit `7327eb7` (`2026-11-20`). Application docs/code and Azure deployment state were inspected separately. This is a repository snapshot, **not** proof that Azure resources exist or have been applied. Verify the live subscription before describing anything as deployed.
+> **Snapshot:** checked-in configuration originally reviewed at infra commit `7327eb7` (`2026-11-20`), with subsequent updates noted below. Application docs/code and Azure deployment state were inspected separately. This is a repository snapshot, **not** proof that Azure resources exist or have been applied. Verify the live subscription before describing anything as deployed.
 >
 > **Operating target:** dev 2–3 sessions/week (about 4–6 hours total); prod showcase about 2 hours/week. AKS is disposable; dev data is disposable; retain prod data/services if the measured cost fits. Total project spend must stay below the hard **$100 USD credit ceiling**.
 
@@ -27,7 +27,7 @@ Module directories are not equivalent to complete modules, environment stacks, o
 
 ### Important current configuration details
 
-- `live/root.hcl` configures an Azure remote-state backend but falls back to a hard-coded subscription if `ARM_SUBSCRIPTION_ID` is unset. The backend's existence, access, location, and charges have not been verified.
+- `live/root.hcl` configures an Azure remote-state backend and requires an explicit, UUID-formatted `ARM_SUBSCRIPTION_ID` for both the backend and provider. The backend's existence, access, location, and charges have not been verified.
 - Regional resource groups, VNet, AKS, ACR, and Cosmos account use `polandcentral`; keep that region unless service/SKU availability or cost blocks it.
 - `live/dev/network` creates a VNet, an AKS subnet, and a reserved private-endpoint subnet. It does not yet create private endpoints or private DNS links.
 - The AKS module currently has `private_cluster_enabled = false` (public API server), a Free management tier, `Standard_D2als_v7` nodes with autoscaling min 1/max 2, workload identity/OIDC enabled, and Key Vault CSI support enabled. The user-selected target is a private control plane.
@@ -43,12 +43,18 @@ Module directories are not equivalent to complete modules, environment stacks, o
 ### 0. Mandatory subscription, cost, and state preflight — before any apply
 
 - [ ] Confirm the active Azure subscription is the intended Azure for Students subscription; record the actual remaining credit and current project charges. Inventory existing resources before assuming the environment is empty.
-- [ ] Remove the hard-coded subscription fallback in `live/root.hcl`; require an explicit `ARM_SUBSCRIPTION_ID` for every plan/apply and verify it in the operator checklist.
+- [x] Remove the hard-coded subscription fallback in `live/root.hcl`; require an explicit `ARM_SUBSCRIPTION_ID` for every plan/apply and verify it in the operator checklist below.
 - [ ] Verify the configured remote state account/container exists, is in the intended subscription, has restricted access and locking, and has a recovery procedure. Include state storage/transactions in the project budget.
 - [ ] Produce a resource-by-resource estimate for the **whole remaining credit**, including persistent prod PaaS, disposable dev stacks, both private DNS/endpoint paths, Gateway controller, public/static IPs, outbound data, backups, ACR, logs, and state. Check the official pricing calculator/actual subscription price; do not rely on a single service's headline or free tier.
 - [ ] Test service/SKU availability in `polandcentral`. If any required service is unavailable or exceeds budget there, stop and get a region/design review before changing region or provisioning.
 - [ ] Determine which services can be stopped, which continue billing when AKS is absent, and what deleting each individual Terragrunt stack removes. Record data-loss and recreation consequences. Alerts are not spending caps.
 - [ ] Keep a safety margin under $100. Do not apply a stack if total lifetime/run-window costs could exhaust the remaining credit.
+
+#### Operator subscription checklist — before each plan/apply
+
+- [ ] Confirm the intended Azure for Students subscription and the signed-in account with `az account show` and `az account list`; do not assume the active subscription is correct.
+- [ ] Set `ARM_SUBSCRIPTION_ID` explicitly to the verified subscription UUID, and compare it with the intended account and the configured remote-state subscription. The backend and provider both use this value; changing it can target a different state and resources.
+- [ ] Complete the remaining credit, resource inventory, backend, availability, quota, and lifecycle cost checks above before planning or applying. A valid UUID alone does not verify the subscription or authorize provisioning.
 
 ### 1. Secure and stabilize network/state foundations
 
