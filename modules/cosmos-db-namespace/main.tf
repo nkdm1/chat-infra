@@ -21,5 +21,5 @@ resource "azurerm_cosmosdb_sql_role_assignment" "this" {
   account_name        = var.account_name
   principal_id        = var.app_principal_id
   role_definition_id  = "${var.account_id}/sqlRoleDefinitions/00000000-0000-0000-0000-000000000002"
-  scope               = "/dbs/${azurerm_cosmosdb_sql_database.this.name}"
+  scope               = "${var.account_id}/dbs/${azurerm_cosmosdb_sql_database.this.name}"
 }
