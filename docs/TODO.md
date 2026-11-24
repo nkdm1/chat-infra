@@ -12,6 +12,8 @@
 - `live/dev/network`
 - `live/dev/cosmos-db`
 - `live/dev/cosmos-private-endpoint`
+- `live/dev/blob-storage`
+- `live/dev/blob-private-endpoint`
 - `live/dev/email-communication-service`
 - `live/dev/aks`
 - `live/dev/workload-identity`
@@ -37,7 +39,8 @@ Module directories are not equivalent to complete modules, environment stacks, o
 - The shared ACR stack configures Basic registry `websecchatacr`, a public endpoint, and the admin account disabled. Basic does not support anonymous pulls. The GitHub OIDC publisher and full Entra-only access policy remain to be implemented and verified; the dev AKS configuration grants its kubelet `AcrPull`. The shared stack uses a different state key than the former dev stack; inspect/migrate any existing state explicitly rather than assuming a path move migrates it.
 - The shared Cosmos account has free tier enabled. Dev's `live/dev/cosmos-db` uses database `chat-dev`, container `messages`, provisioned throughput `400`, and configures a database-scoped Cosmos data-plane role for the dev workload identity. The identity and AKS federation are separate stacks so they survive cluster replacement independently. None of this has been deployed or access-tested.
 - The dev ACS stack currently creates an Email Communication Service resource. A verified sender/domain and complete email configuration are not represented by the current stack. ACS has no traditional Private Link endpoint; use authenticated outbound calls and consider Network Security Perimeter only if the subscription supports it without unacceptable preview risk.
-- Dev has no Terragrunt stacks yet for PostgreSQL, Blob Storage, Key Vault, Azure Managed Redis, or Web PubSub. Other data-service private endpoints/DNS, a Gateway API controller/route, and `live/prod/` stacks are still missing.
+- Dev Blob Storage configures a private `attachments` container, a container-scoped workload role, public access and Shared Key disabled, and a private endpoint/DNS stack. Name availability, private provisioning/management access, and application access are not yet verified.
+- Dev has no Terragrunt stacks yet for PostgreSQL, Key Vault, Azure Managed Redis, or Web PubSub. Other data-service private endpoints/DNS, a Gateway API controller/route, and `live/prod/` stacks are still missing.
 - The `chat-webapp` repo has one GitHub Actions CI workflow for checks/tests; no image-publish or deployment workflow and no Kubernetes deployment/Gateway manifests were found. The app itself has a Dockerfile and working local Compose/emulator setup.
 - The application code implements Better Auth/PostgreSQL sessions, server-mediated HTTP message writes, PostgreSQL membership authorization, Cosmos persistence, server-to-user Web PubSub events, and Redis/Web PubSub fallbacks. Azure integration has not been runtime-tested in this review.
 
@@ -83,7 +86,7 @@ Module directories are not equivalent to complete modules, environment stacks, o
 - [ ] Verify the configured dev Cosmos data-plane role for the dev workload identity is scoped to `chat-dev` and cannot access prod. The identity and database role are configured but not deployed or tested.
 - [ ] Preserve an independent shared Cosmos account state stack. Implement dev database teardown/recreation so destroying `live/dev/cosmos-db` cannot destroy the shared account or `chat-prod`.
 - [ ] Add private PostgreSQL Flexible Server/database stack and private VNet connectivity; configure TLS, backups/storage, secret-backed credentials, and a tested start/stop/delete/recreate policy.
-- [ ] Add Blob Storage with a private `attachments` container, private endpoint/DNS, public access disabled, and container-scoped workload role.
+- [ ] Validate the configured private Blob Storage, `attachments` container, private endpoint/DNS, and container-scoped workload role. Verify operator provisioning and data-plane access with public access and Shared Key disabled; check the account name is available.
 - [ ] Add Azure Managed Redis with private endpoint/DNS, public access disabled, TLS/auth configuration supported by the selected SKU, and a cost-tested lifecycle. Preserve the app's Redis fallbacks; Redis is not the authorization source of truth.
 - [ ] Add Key Vault with a private endpoint/DNS, public access disabled, soft-delete/purge settings, and CSI access for the app workload identity.
 - [ ] Add Web PubSub with request-type/network ACLs: public client connections for browser WSS; client credentials only minted by the authenticated API and receive-only; REST API access only from the fixed AKS egress IP; deny other public request types. Verify the chosen tier's connection limits, pricing, and ACL behavior.
