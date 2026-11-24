@@ -96,7 +96,7 @@ Official constraints to verify during implementation: [Web PubSub network access
 
 ## Provisioning, delivery, and operations
 
-1. Before any plan/apply, verify the explicit target subscription, remaining credit, region/SKU availability, quotas/free tiers, remote-state backend, and an upper-bound estimate for the proposed trial and teardown. Full two-month spend depends on actual usage and retention decisions; measure and reassess it.
+1. Before planning/provisioning, review the explicit target subscription, remaining credit, region/SKU availability, quotas/free tiers and remote state. List known trial rates, teardown scope and retained resources, and set a safety margin; the user prefers measuring charges after a bounded trial over attempting a complete forecast. Billing delays and unknown usage prevent a guarantee against exceeding the credit ceiling.
 2. Run OpenTofu manually: inspect/review plans and apply only the approved stack. CI may run formatting/validation but never applies infrastructure.
 3. GitHub Actions runs app checks on PRs. On merge to the default branch, build and push an immutable/versioned app image to ACR with OIDC. Do not auto-roll out to AKS.
 4. Manually create/start the AKS cluster for a session, deploy the app with environment configuration, run the reviewed migration image as a one-off Kubernetes Job before rollout, and validate Gateway API/TLS. With the private control plane, use the approved `az aks command invoke` workflow.
@@ -114,7 +114,7 @@ The desired project state is reached when:
 - The app runs as one image on AKS, is reachable at its environment hostname over HTTPS, uses Better Auth sessions, private service endpoints, and server-mediated message writes.
 - Authenticated message writes are persisted before server push; browser Web PubSub credentials are short-lived and receive-only; Redis/Web PubSub outages degrade as the app currently specifies.
 - The dev AKS cluster can be created, deployed, smoke-tested, and destroyed without removing retained shared/prod state. Prod can be resumed for a weekly showcase with its data intact when budget allows.
-- Before any apply, complete the availability, state and bounded trial cost review, and obtain explicit approval for the selected resources and teardown. Measure trial charges when billing data has arrived and reassess the remaining lifecycle against the $100 ceiling.
+- Before any apply, review availability, state, known costs and trial scope, and obtain explicit approval for the selected resources and teardown. Measure trial charges when billing data has arrived and reassess the remaining lifecycle against the $100 ceiling.
 
 ## Related application contract
 
