@@ -8,7 +8,7 @@ Read-only queries to the [Azure Retail Prices API](https://learn.microsoft.com/e
 
 | Meter | Reference | Example of 60 days continuously allocated |
 |---|---:|---:|
-| Managed Redis Balanced B0 | $0.0208/hour | $29.95 for one instance |
+| Managed Redis Balanced B0 | $0.0208/hour | $29.95 for one instance; verify actual non-HA pricing |
 | PostgreSQL Flexible Server B1MS compute | $0.0199/hour | $28.66 for one server's compute only |
 | Standard static public IPv4 | $0.005/hour | $14.40 for two addresses |
 | Web PubSub Standard | $1.61/unit/day | $96.60 for one continuously retained unit |
@@ -19,7 +19,7 @@ Those three example continuous Redis/PostgreSQL/public-IP lines total **$73.01**
 ## Required inputs and line items
 
 - [ ] Verify remaining credit, offer-specific benefits, current charges, currency and tax; maintain a safety margin.
-- [ ] Choose and verify regional availability/quota and actual price for each AKS node SKU, PostgreSQL SKU/storage/backup, Redis SKU/HA, Web PubSub Free instances, Cosmos free tier and aggregate throughput, and ACR.
+- [ ] Choose and verify regional availability/quota and actual price for each AKS node SKU, PostgreSQL SKU/storage/backup, dev Redis `Balanced_B0` with HA disabled, Web PubSub Free instances, Cosmos free tier and aggregate throughput, and ACR. The user selected no Redis HA for either environment.
 - [ ] Estimate per-environment billable hours for AKS, PostgreSQL compute, Redis and Web PubSub, including provisioning/deletion time, failed attempts, auto-restarts, and non-session time. Confirm which services can really be stopped and what continues billing.
 - [ ] Estimate retained PostgreSQL storage and backups, Blob data/transactions, Cosmos storage/throughput beyond allowance, Key Vault operations, ACS email, NAT Gateway and data processing, load balancers/rules, static IPs, all private endpoints and data processing, private DNS, logs, state storage, and outbound traffic.
 - [ ] Include both dev and prod, shared resources once, all session periods over the two-month horizon, and cost while services are retained or stopped. Identify the exact data destroyed by each proposed lifecycle.

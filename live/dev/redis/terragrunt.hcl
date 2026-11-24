@@ -20,7 +20,7 @@ inputs = {
   name                      = "chat-${local.env}-${local.subscription_suffix}-redis"
   resource_group_name       = dependency.resource_group.outputs.name
   location                  = "polandcentral"
-  sku_name                  = get_env("REDIS_SKU")
-  high_availability_enabled = tobool(get_env("REDIS_HIGH_AVAILABILITY"))
+  sku_name                  = "Balanced_B0"
+  high_availability_enabled = false
   env                       = local.env
 }
