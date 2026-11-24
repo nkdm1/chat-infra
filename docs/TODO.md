@@ -50,6 +50,13 @@ Module directories are not equivalent to complete modules, environment stacks, o
 - [ ] Determine which services can be stopped, which continue billing when AKS is absent, and what deleting each individual Terragrunt stack removes. Record data-loss and recreation consequences. Alerts are not spending caps.
 - [ ] Keep a safety margin under $100. Do not apply a stack if total lifetime/run-window costs could exhaust the remaining credit.
 
+#### Read-only preflight observations — 2026-11-24
+
+- The user confirmed the enabled `Azure for Students` subscription ending `b2fcbf68` as the intended target. Resource inventory returned resource groups `tofu-rg` and `websec`, and one resource: storage account `chatopentofu` in `tofu-rg`, `polandcentral`. This is a point-in-time inventory, not proof of all billing or data-plane activity.
+- The `tfstate` container exists and was readable with Entra authentication. It contains both `dev/resource-group/tofu.tfstate` and `live/dev/resource-group/tofu.tfstate`. Resolve their history and the intended state key before planning; do not assume either can be deleted or that the current configuration targets the right state.
+- Blob versioning is enabled; blob soft delete is disabled. Container-level and blob-level leases were unlocked at inspection time; this does not prove OpenTofu locking works. The storage account allows network access by default, while anonymous blob access is disabled. Review inherited access, network restrictions, recovery, and locking before treating the backend as verified.
+- The actual remaining student credit and total project charges were not established. Billing and consumption queries did not produce a verified credit balance. The rest of the cost, region/SKU, quota, and backend checks remain open; do not run a plan based on these observations alone.
+
 #### Operator subscription checklist — before each plan/apply
 
 - [ ] Confirm the intended Azure for Students subscription and the signed-in account with `az account show` and `az account list`; do not assume the active subscription is correct.
