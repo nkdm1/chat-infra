@@ -18,7 +18,7 @@
 - **Deployment:** CI tests pull requests; a merge to the default branch builds and publishes an immutable image to ACR using GitHub OIDC. OpenTofu changes and AKS rollouts are reviewed and run manually; merges never auto-apply infrastructure or auto-deploy the app.
 - **Region:** use `polandcentral` for regional resources unless a required service/SKU is unavailable or fails the cost review there. In that case, stop and review the region change before provisioning.
 - **Lifecycle:** dev data may be destroyed because it is disposable. Prod data/services should be retained between showcases by default if the budget allows. AKS is stateless and may be destroyed/recreated in either environment. Destroying AKS does not stop or delete independent PaaS resources.
-- **Budget and schedule:** the whole project has a hard **$100 USD Azure for Students credit ceiling**. Dev is used about 2–3 two-hour sessions/week; prod is a roughly two-hour weekly showcase. Neither environment is intended to run 24/7. The credit limit—not an assumption that a service is cheap—decides what can be retained.
+- **Budget and schedule:** the whole project has a hard **$100 USD Azure for Students credit ceiling** over approximately two months. Dev is used about 2–3 two-hour sessions/week; prod is a roughly two-hour weekly showcase. Neither environment is intended to run 24/7. The credit limit—not an assumption that a service is cheap—decides what can be retained.
 
 ## Application architecture
 
@@ -72,7 +72,7 @@ Network policy distinguishes **network reachability** from **application authori
 ### Public entry paths and constrained exceptions
 
 1. **App:** internet users reach the app only over HTTPS through the public Gateway API route. Cloudflare hosts DNS for `dev.chat.nkdm.io` and `chat.nkdm.io`; enforce TLS to the app and set `BETTER_AUTH_URL` to each exact origin.
-2. **Web PubSub:** public `ClientConnection`/WSS is required because browsers read live events directly. Issue only short-lived backend-minted receive-only client URLs. Deny public REST/server operations; allow server REST through a private endpoint and private DNS in each environment. The backend—not the browser—sends events. The user selected this private path because Azure's public IP and request-type rules are evaluated independently; an IP allow rule cannot override a public REST deny.
+2. **Web PubSub:** use Free tier for each environment, subject to regional quota verification. Public `ClientConnection`/WSS uses short-lived backend-minted receive-only client URLs. Server REST is also publicly reachable but requires Entra authentication and the scoped app role; disable local/key authentication and deny public server connections and trace requests. The user accepted this network exposure because Free does not support private endpoints, and public IP rules cannot restrict only REST while admitting arbitrary browsers. The backend—not the browser—sends events.
 3. **ACR:** the registry endpoint is publicly addressable for GitHub-hosted image publishing and AKS image pulls, but operations require Entra identity. No anonymous pulls or admin credentials; assign only `AcrPush` to the build identity and `AcrPull` to the AKS kubelet identity.
 4. **ACS Email:** the app makes outbound HTTPS calls using its workload identity and a least-privilege email-sending role. ACS has no traditional Private Link endpoint. A Network Security Perimeter may be used as optional hardening if the subscription supports it without unacceptable preview/operational risk; it is not a prerequisite. Internet users receive no ACS identity/role and cannot send mail through the app's identity.
 
@@ -109,7 +109,7 @@ The $100 limit is total project credit, **not a monthly allowance and not $100 p
 The desired project state is reached when:
 
 - Dev and prod have separate state, app identities, credentials, and application data; the Cosmos account and container registry are deliberately shared.
-- Only the app Gateway and receive-only Web PubSub client connection accept intended public traffic. Data stores use private connectivity/public access disabled. ACR and ACS public endpoint exceptions are identity-restricted as specified above.
+- The app Gateway and Web PubSub client connection accept intended public traffic; Web PubSub REST is also publicly reachable and Entra-restricted. Data stores use private connectivity/public access disabled. ACR and ACS public endpoint exceptions are identity-restricted as specified above.
 - The app runs as one image on AKS, is reachable at its environment hostname over HTTPS, uses Better Auth sessions, private service endpoints, and server-mediated message writes.
 - Authenticated message writes are persisted before server push; browser Web PubSub credentials are short-lived and receive-only; Redis/Web PubSub outages degrade as the app currently specifies.
 - The dev AKS cluster can be created, deployed, smoke-tested, and destroyed without removing retained shared/prod state. Prod can be resumed for a weekly showcase with its data intact when budget allows.

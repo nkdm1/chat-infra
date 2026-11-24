@@ -28,7 +28,7 @@ resource "azapi_resource" "this" {
       networkACLs = {
         defaultAction = "Allow"
         publicNetwork = {
-          deny = ["RESTAPI", "ServerConnection", "Trace"]
+          deny = ["ServerConnection", "Trace"]
         }
       }
     }
@@ -41,52 +41,12 @@ resource "azapi_resource" "this" {
   }
 }
 
-resource "azurerm_private_dns_zone" "this" {
-  name                = "privatelink.webpubsub.azure.com"
-  resource_group_name = var.resource_group_name
-  tags                = local.tags
-}
-
-resource "azurerm_private_dns_zone_virtual_network_link" "this" {
-  name                 = "${var.name}-vnet-link"
-  private_dns_zone_id  = azurerm_private_dns_zone.this.id
-  virtual_network_id   = var.virtual_network_id
-  registration_enabled = false
-  tags                 = local.tags
-}
-
-resource "azurerm_private_endpoint" "this" {
-  name                = "${var.name}-pe"
-  location            = var.location
-  resource_group_name = var.resource_group_name
-  subnet_id           = var.subnet_id
-
-  private_service_connection {
-    name                           = "${var.name}-connection"
-    private_connection_resource_id = azapi_resource.this.id
-    subresource_names              = ["webpubsub"]
-    is_manual_connection           = false
-  }
-
-  private_dns_zone_group {
-    name                 = "default"
-    private_dns_zone_ids = [azurerm_private_dns_zone.this.id]
-  }
-
-  tags = local.tags
-}
-
 resource "azurerm_web_pubsub_network_acl" "this" {
   web_pubsub_id  = azapi_resource.this.id
   default_action = "Allow"
 
   public_network {
-    denied_request_types = ["RESTAPI", "ServerConnection", "Trace"]
-  }
-
-  private_endpoint {
-    id                   = azurerm_private_endpoint.this.id
-    denied_request_types = ["ClientConnection", "ServerConnection", "Trace"]
+    denied_request_types = ["ServerConnection", "Trace"]
   }
 }
 

@@ -4,6 +4,6 @@ output "id" {
 }
 
 output "endpoint" {
-  description = "HTTPS service endpoint, resolving privately inside the VNet."
+  description = "Public HTTPS service endpoint, protected by Entra authentication."
   value       = "https://${azapi_resource.this.output.properties.hostName}"
 }

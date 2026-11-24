@@ -8,28 +8,13 @@ variable "resource_group_id" {
   type        = string
 }
 
-variable "resource_group_name" {
-  description = "Resource group name."
-  type        = string
-}
-
 variable "location" {
   description = "Azure region."
   type        = string
 }
 
 variable "sku_name" {
-  description = "Reviewed Web PubSub SKU supporting private endpoints."
-  type        = string
-}
-
-variable "subnet_id" {
-  description = "Private endpoint subnet ID."
-  type        = string
-}
-
-variable "virtual_network_id" {
-  description = "VNet to link to private DNS."
+  description = "Web PubSub SKU."
   type        = string
 }
 
