@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: chat-config
+  namespace: chat
+data:
+  BETTER_AUTH_URL: {{ printf "https://%s" (required "hostname is required" .Values.hostname) | quote }}
+  EMAIL_PROVIDER: "acs"
+  MAIL_FROM: {{ required "config.acsSenderAddress is required" .Values.config.acsSenderAddress | quote }}
+  ACS_SENDER_ADDRESS: {{ .Values.config.acsSenderAddress | quote }}
+  ACS_ENDPOINT: {{ required "config.acsEndpoint is required" .Values.config.acsEndpoint | quote }}
+  COSMOS_ENDPOINT: {{ required "config.cosmosEndpoint is required" .Values.config.cosmosEndpoint | quote }}
+  COSMOS_DATABASE: {{ required "config.cosmosDatabase is required" .Values.config.cosmosDatabase | quote }}
+  COSMOS_MESSAGES_CONTAINER: "messages"
+  AZURE_STORAGE_ACCOUNT_URL: {{ required "config.blobEndpoint is required" .Values.config.blobEndpoint | quote }}
+  AZURE_STORAGE_CONTAINER: "attachments"
+  WEBPUBSUB_ENDPOINT: {{ required "config.webPubSubEndpoint is required" .Values.config.webPubSubEndpoint | quote }}
+  WEBPUBSUB_HUB: "chat"
+  AUTO_PROVISION: "false"

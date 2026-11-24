@@ -1,0 +1,36 @@
+{{- if .Values.migration.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ required "migration.jobName is required" .Values.migration.jobName | quote }}
+  namespace: chat
+spec:
+  backoffLimit: 0
+  template:
+    metadata:
+      labels:
+        azure.workload.identity/use: "true"
+    spec:
+      serviceAccountName: chat-app
+      restartPolicy: Never
+      containers:
+        - name: migrator
+          image: {{ required "migrationImage is required" .Values.migrationImage | quote }}
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: chat-runtime
+                  key: DATABASE_URL
+          volumeMounts:
+            - name: secrets
+              mountPath: /mnt/secrets-store
+              readOnly: true
+      volumes:
+        - name: secrets
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: chat-secrets
+{{- end }}

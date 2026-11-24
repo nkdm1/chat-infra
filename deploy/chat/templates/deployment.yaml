@@ -1,0 +1,51 @@
+{{- if .Values.app.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: chat
+  namespace: chat
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: chat
+  template:
+    metadata:
+      labels:
+        app: chat
+        azure.workload.identity/use: "true"
+    spec:
+      serviceAccountName: chat-app
+      containers:
+        - name: chat
+          image: {{ required "image is required" .Values.image | quote }}
+          ports:
+            - name: http
+              containerPort: 3000
+          envFrom:
+            - configMapRef:
+                name: chat-config
+            - secretRef:
+                name: chat-runtime
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            initialDelaySeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /api/ready
+              port: http
+            initialDelaySeconds: 5
+          volumeMounts:
+            - name: secrets
+              mountPath: /mnt/secrets-store
+              readOnly: true
+      volumes:
+        - name: secrets
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: chat-secrets
+{{- end }}

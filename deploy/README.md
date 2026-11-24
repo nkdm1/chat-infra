@@ -1,0 +1,22 @@
+# Manual AKS deployment
+
+These manifests are configuration, not a completed deployment. Do not use them before the infrastructure preflight, cost review, and individual stack approvals in `docs/TODO.md`. The Kubernetes API is private: use the approved AKS Run Command workflow, not a public API endpoint. No CI job deploys this chart.
+
+## Prerequisites
+
+- Cost and validate the network-owned Gateway IP, NAT Gateway, load balancer, NGINX Gateway Fabric, and all private paths. The Gateway IP and the NAT egress IP have distinct purposes.
+- Install the Gateway API standard CRDs and open-source NGINX Gateway Fabric controller, pinned to compatible reviewed versions. Version 2.9.1 documents a matching standard CRD bundle and OCI chart at `oci://ghcr.io/nginx/charts/nginx-gateway-fabric`; verify version compatibility and image provenance before installation. The cloud load balancer must honor the Gateway infrastructure annotations. Do not set `spec.addresses` without verifying the controller's Azure load-balancer behavior.
+- Configure Cloudflare to proxy the environment hostname and use Full (strict) TLS. Create an Origin CA certificate for that hostname, securely deliver its certificate and private key to a Kubernetes `kubernetes.io/tls` secret in namespace `chat`, and supply that secret's name in `tlsSecretName`. Origin CA certificates are not browser-trusted for direct access to the load balancer. Plan certificate rotation, Cloudflare proxy configuration, and restricted key handling; do not put the key in Git, Helm values, shell history, or logs. Ensure the chosen Run Command method handles uploaded secret files safely.
+- Create the `chat` namespace using `chat-namespace.yaml`; it is deliberately outside the Helm chart so uninstalling the release does not delete the namespace and its other resources.
+- Privately provision Key Vault secrets named `better-auth-secret`, `database-url`, and `redis-url`. Use the separately configured application database login, not the PostgreSQL server administrator. Include TLS in both database URLs. Check the CSI add-on, workload federation, vault role and private DNS. Syncing creates the `chat-runtime` Kubernetes Secret only while a pod mounts the CSI volume; ensure cluster RBAC protects it and rotate/restart workloads when needed.
+- Create an operator-owned values file with the non-secret endpoint, sender, identity, tenant, Key Vault, hostname, static Gateway IP name and resource-group values listed in `chat/values.yaml`. For dev use `dev.chat.nkdm.io` and `chat-dev`. Get actual endpoints and identity IDs from reviewed OpenTofu outputs. Verify name availability and DNS; do not rely on example names. Supply immutable image digests for both `image` and `migrationImage`.
+
+## Reviewed migration, then rollout
+
+1. Prepare the namespace, controller and TLS secret separately. For an initial installation set `app.enabled=false`, `migration.enabled=true`, and set a unique `migration.jobName` and reviewed `migrationImage`. Install/upgrade the chart manually with the operator values. The chart creates the service account, ConfigMap, SecretProviderClass and a one-shot migration Job, but no application Deployment or Gateway in this mode.
+2. Wait for that Job to complete and inspect its status. Stop on failure; never deploy the app before the reviewed migration succeeds. Do not expose secrets while inspecting logs.
+3. Manually upgrade the release with `migration.enabled=false` and `app.enabled=true`, using the reviewed runner `image`. This removes the migration Job from the release and creates the Deployment, Service and HTTPS Gateway/route. Confirm the generated load balancer uses the reserved IP, Cloudflare proxy/DNS and Full (strict) TLS are correct, and `/api/health` and `/api/ready` behave as specified.
+4. For subsequent migrations, turning off `app.enabled` removes the existing Deployment and Gateway, causing downtime. Plan this explicitly, use a new Job name and reviewed migration image, and restore the app only after success. Never enable both app and migration simultaneously as a substitute for ordered execution.
+5. Stop only individually approved stacks. Deleting AKS does not delete or stop independent PaaS, IP, DNS or NAT resources; check charges and preserve shared/prod data.
+
+The chart has not been applied to a cluster. Validate the CSI sync ordering, image authentication, RBAC, gateway annotations, certificate handling, migrations and service access end to end before relying on it.

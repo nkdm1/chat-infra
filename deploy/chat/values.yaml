@@ -1,0 +1,25 @@
+# Supply environment-specific values through an operator-owned values file.
+# Never put credentials or certificate private keys in Helm values.
+image: ""
+migrationImage: ""
+app:
+  enabled: false
+migration:
+  enabled: false
+  # Use a unique, reviewed job name for each migration run.
+  jobName: ""
+workloadClientId: ""
+tenantId: ""
+keyVaultName: ""
+hostname: ""
+# Kubernetes TLS secret containing the Cloudflare Origin CA certificate/key.
+tlsSecretName: ""
+gatewayPublicIpName: ""
+gatewayPublicIpResourceGroup: ""
+config:
+  cosmosEndpoint: ""
+  cosmosDatabase: ""
+  blobEndpoint: ""
+  webPubSubEndpoint: ""
+  acsEndpoint: ""
+  acsSenderAddress: ""

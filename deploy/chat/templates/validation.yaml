@@ -1,0 +1,9 @@
+{{- if and .Values.app.enabled .Values.migration.enabled -}}
+{{- fail "app and migration must not be enabled together; run the migration before rollout" -}}
+{{- end -}}
+{{- if and .Values.app.enabled (not (regexMatch "@sha256:[a-f0-9]{64}$" .Values.image)) -}}
+{{- fail "image must use an immutable sha256 digest" -}}
+{{- end -}}
+{{- if and .Values.migration.enabled (not (regexMatch "@sha256:[a-f0-9]{64}$" .Values.migrationImage)) -}}
+{{- fail "migrationImage must use an immutable sha256 digest" -}}
+{{- end -}}
