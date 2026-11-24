@@ -11,6 +11,12 @@ resource "azurerm_role_assignment" "network" {
   principal_id         = azurerm_user_assigned_identity.control_plane.principal_id
 }
 
+resource "azurerm_role_assignment" "egress_ip" {
+  scope                = var.egress_public_ip_id
+  role_definition_name = "Network Contributor"
+  principal_id         = azurerm_user_assigned_identity.control_plane.principal_id
+}
+
 resource "azurerm_role_assignment" "gateway_ip" {
   scope                = var.gateway_public_ip_id
   role_definition_name = "Network Contributor"
@@ -64,7 +70,11 @@ resource "azurerm_kubernetes_cluster" "this" {
     service_cidr        = var.service_cidr
     dns_service_ip      = var.dns_service_ip
     load_balancer_sku   = "standard"
-    outbound_type       = "userAssignedNATGateway"
+    outbound_type       = "loadBalancer"
+
+    load_balancer_profile {
+      outbound_ip_address_ids = [var.egress_public_ip_id]
+    }
   }
 
   lifecycle {
@@ -73,7 +83,7 @@ resource "azurerm_kubernetes_cluster" "this" {
 
   tags = local.tags
 
-  depends_on = [azurerm_role_assignment.network, azurerm_role_assignment.gateway_ip]
+  depends_on = [azurerm_role_assignment.network, azurerm_role_assignment.gateway_ip, azurerm_role_assignment.egress_ip]
 }
 
 resource "azurerm_role_assignment" "acr_pull" {

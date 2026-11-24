@@ -23,6 +23,11 @@ variable "virtual_network_id" {
   type        = string
 }
 
+variable "egress_public_ip_id" {
+  description = "Network-owned public IP reserved for AKS outbound traffic."
+  type        = string
+}
+
 variable "gateway_public_ip_id" {
   description = "Network-owned public IP reserved for the Gateway."
   type        = string

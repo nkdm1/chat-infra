@@ -13,6 +13,11 @@ output "postgresql_subnet_id" {
   value       = azurerm_subnet.postgresql.id
 }
 
+output "egress_public_ip_id" {
+  description = "Resource ID of the static AKS outbound IP."
+  value       = azurerm_public_ip.egress.id
+}
+
 output "egress_public_ip" {
   description = "Static AKS outbound IP, retained with the network stack."
   value       = azurerm_public_ip.egress.ip_address

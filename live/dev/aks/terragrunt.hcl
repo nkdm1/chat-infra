@@ -30,6 +30,7 @@ inputs = {
   dns_prefix           = "chat-${local.env}-aks"
   aks_subnet_id        = dependency.network.outputs.aks_subnet_id
   virtual_network_id   = dependency.network.outputs.virtual_network_id
+  egress_public_ip_id  = dependency.network.outputs.egress_public_ip_id
   gateway_public_ip_id = dependency.network.outputs.gateway_public_ip_id
 
   acr_id = dependency.container_registry.outputs.id
