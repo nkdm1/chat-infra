@@ -14,6 +14,10 @@ dependency "shared_cosmos_db_account" {
   config_path = "../../shared/cosmos-db-account"
 }
 
+dependency "workload_identity" {
+  config_path = "../workload-identity"
+}
+
 inputs = {
   account_id          = dependency.shared_cosmos_db_account.outputs.id
   account_name        = dependency.shared_cosmos_db_account.outputs.name
@@ -22,6 +26,5 @@ inputs = {
   database_name       = "chat-${local.env}"
   container_name      = "messages"
   throughput          = 400
-  #TODO: sub this with a real workload identity later
-  app_principal_id = null
+  app_principal_id = dependency.workload_identity.outputs.principal_id
 }
