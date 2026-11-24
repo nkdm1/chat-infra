@@ -30,7 +30,7 @@ Module directories are not equivalent to complete modules, environment stacks, o
 - `live/root.hcl` configures an Azure remote-state backend and requires an explicit, UUID-formatted `ARM_SUBSCRIPTION_ID` for both the backend and provider. The backend's existence, access, location, and charges have not been verified.
 - Regional resource groups, VNet, AKS, ACR, and Cosmos account use `polandcentral`; keep that region unless service/SKU availability or cost blocks it.
 - `live/dev/network` creates a VNet, an AKS subnet, and a reserved private-endpoint subnet. It does not yet create private endpoints or private DNS links.
-- The AKS module currently has `private_cluster_enabled = false` (public API server), a Free management tier, `Standard_D2als_v7` nodes with autoscaling min 1/max 2, workload identity/OIDC enabled, and Key Vault CSI support enabled. The user-selected target is a private control plane.
+- The AKS module configures a private API server, AKS-managed private DNS, no public API FQDN, and Run Command enabled. This configuration has not been applied or tested. It uses a Free management tier, `Standard_D2als_v7` nodes with autoscaling min 1/max 2, workload identity/OIDC, and Key Vault CSI support.
 - The dev ACR stack uses Basic. Its endpoint is public by default; the module does not define the selected Entra-only access policy or GitHub OIDC publisher.
 - The shared Cosmos account has free tier enabled. Dev's `live/dev/cosmos-db` uses database `chat-dev`, container `messages`, provisioned throughput `400`, and currently passes `app_principal_id = null`. The target is a separate `chat-prod` database and environment-scoped identities/access on the same account.
 - The dev ACS stack currently creates an Email Communication Service resource. A verified sender/domain and complete email configuration are not represented by the current stack. ACS has no traditional Private Link endpoint; use authenticated outbound calls and consider Network Security Perimeter only if the subscription supports it without unacceptable preview risk.
@@ -65,7 +65,8 @@ Module directories are not equivalent to complete modules, environment stacks, o
 
 ### 1. Secure and stabilize network/state foundations
 
-- [ ] Convert AKS to a private control plane and validate private DNS. Test operator access using manual `az aks command invoke` / portal Run Command with least-privilege Azure RBAC. This is the initial manual access path; do not add a permanent VPN/VM without cost review.
+- [x] Configure AKS for a private control plane, AKS-managed private DNS, and Run Command; disable the public API FQDN. Changing an existing public cluster to private requires replacement; review the plan before any approved apply.
+- [ ] Validate the private DNS and test operator access using manual `az aks command invoke` / portal Run Command with least-privilege Azure RBAC. This is the initial manual access path; do not add a permanent VPN/VM without cost review.
 - [ ] Keep the app Gateway's public ingress separate from the private AKS API server. Select and price a compatible Gateway API controller; deploy only the necessary public HTTPS listener/routes.
 - [ ] Allocate a stable Gateway public IP and a stable AKS outbound/egress IP in network-level stacks that survive cluster destruction/recreation. Verify they have no unintended inbound listener; cost them and document who owns them.
 - [ ] Keep Cloudflare as DNS provider. Point `dev.chat.nkdm.io` to the dev Gateway and `chat.nkdm.io` to the prod Gateway. Select/test the Cloudflare proxy mode, end-to-end TLS certificate path, DNS updates, and recovery if an IP changes.

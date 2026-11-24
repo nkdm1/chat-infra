@@ -4,11 +4,14 @@ resource "azurerm_kubernetes_cluster" "this" {
   resource_group_name = var.resource_group_name
   dns_prefix          = var.dns_prefix
 
-  sku_tier                          = "Free"
-  private_cluster_enabled           = false
-  role_based_access_control_enabled = true
-  oidc_issuer_enabled               = true
-  workload_identity_enabled         = true
+  sku_tier                            = "Free"
+  private_cluster_enabled             = true
+  private_dns_zone_id                 = "System"
+  private_cluster_public_fqdn_enabled = false
+  run_command_enabled                 = true
+  role_based_access_control_enabled   = true
+  oidc_issuer_enabled                 = true
+  workload_identity_enabled           = true
 
   default_node_pool {
     name                 = "system"
