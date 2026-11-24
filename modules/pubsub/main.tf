@@ -7,8 +7,8 @@ terraform {
   }
 }
 
-# Create the service with its public request restrictions in the initial ARM
-# request. The AzureRM ACL resource below manages the ACL after creation.
+# Free tier does not support network ACLs. Paid tiers receive the request
+# restrictions in the initial ARM request; AzureRM manages them afterward.
 resource "azapi_resource" "this" {
   type      = "Microsoft.SignalRService/webPubSub@2024-03-01"
   name      = var.name
@@ -21,17 +21,18 @@ resource "azapi_resource" "this" {
       name     = var.sku_name
       capacity = 1
     }
-    properties = {
+    properties = merge({
       disableAadAuth      = false
       disableLocalAuth    = true
       publicNetworkAccess = "Enabled"
+      }, var.sku_name == "Free_F1" ? {} : {
       networkACLs = {
         defaultAction = "Allow"
         publicNetwork = {
           deny = ["ServerConnection", "Trace"]
         }
       }
-    }
+    })
   }
 
   response_export_values = ["properties.hostName"]
@@ -42,6 +43,7 @@ resource "azapi_resource" "this" {
 }
 
 resource "azurerm_web_pubsub_network_acl" "this" {
+  count          = var.sku_name == "Free_F1" ? 0 : 1
   web_pubsub_id  = azapi_resource.this.id
   default_action = "Allow"
 

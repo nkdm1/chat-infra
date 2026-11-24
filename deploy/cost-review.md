@@ -1,6 +1,6 @@
 # Two-month cost review — incomplete; not an authorization to plan or apply
 
-The user specified an approximately two-month project horizon and a total $100 Azure for Students credit ceiling, **not** two months of continuous resource allocation. Most resources can be destroyed between use windows; if retention is too costly, even showcase data may be destroyed and regenerated. Azure charges can continue outside those windows for anything retained. The user selected Web PubSub Free, with the explicit security trade-off that server REST is publicly reachable and Entra-authenticated. They also selected AKS load-balancer egress instead of a persistent NAT Gateway; verify load-balancer/SNAT pricing and behavior.
+The user specified an approximately two-month project horizon and a total $100 Azure for Students credit ceiling, **not** two months of continuous resource allocation. Most resources can be destroyed between use windows; if retention is too costly, even showcase data may be destroyed and regenerated. Azure charges can continue outside those windows for anything retained. The user selected Web PubSub Free, with the explicit security trade-off that server REST is publicly reachable and network ACLs are unavailable; Entra authentication is configured for server operations and must be verified. They also selected AKS load-balancer egress instead of a persistent NAT Gateway; verify load-balancer/SNAT pricing and behavior.
 
 ## Proposed 24-hour measurement — not yet approved or run
 
