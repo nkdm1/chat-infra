@@ -87,7 +87,7 @@ Official constraints to verify during implementation: [Web PubSub network access
 ## Identity, secrets, and runtime configuration
 
 - Use an AKS workload identity for the app service account `chat/chat-app`, with only the data-plane permissions needed for its environment. Use the AKS kubelet identity for ACR pulls. Keep GitHub OIDC image-push identity and human OpenTofu operator identity separate.
-- Use Key Vault + AKS Secrets Store CSI Driver for runtime secrets. Keep non-secret settings in a ConfigMap. Never commit secret values, place them in images/build args, expose them through browser variables, or emit them in OpenTofu outputs/logs.
+- Use Key Vault + AKS Secrets Store CSI Driver for runtime secrets. Keep non-secret settings in a ConfigMap. Never commit secret values, place them in images/build args, expose them through browser variables, or emit them in OpenTofu outputs/logs. Purge protection is disabled for both environments by user decision; dev vault soft-delete retention is 7 days. Choose prod retention separately before creation. Do not automatically purge or recover vaults on destroy/create.
 - Runtime secrets include `BETTER_AUTH_SECRET`, `DATABASE_URL`, and `REDIS_URL`; `SMTP_PASS` is unnecessary when ACS is used. PostgreSQL and Redis credential/auth modes must match the selected Azure service configuration.
 - Azure uses workload identity/managed identity where supported for Cosmos, Blob Storage, Web PubSub, and ACS. No local emulator `*_CONNECTION_STRING` values in Azure; set `AUTO_PROVISION=false`.
 - Set environment-specific `COSMOS_DATABASE`, endpoints, hub/container names, `EMAIL_PROVIDER=acs`, and `BETTER_AUTH_URL`. Do not introduce `NEXT_PUBLIC_*` values.

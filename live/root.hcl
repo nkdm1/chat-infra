@@ -23,7 +23,12 @@ generate "provider" {
   if_exists = "overwrite_terragrunt"
   contents  = <<EOF
 provider "azurerm" {
-  features {}
+  features {
+    key_vault {
+      purge_soft_delete_on_destroy    = false
+      recover_soft_deleted_key_vaults = false
+    }
+  }
   subscription_id = "${local.subscription_id}"
 }
 EOF
