@@ -12,6 +12,16 @@ resource "azurerm_private_dns_zone_virtual_network_link" "this" {
   tags                 = local.tags
 }
 
+resource "azurerm_private_dns_zone_virtual_network_link" "additional" {
+  for_each = var.additional_virtual_network_ids
+
+  name                 = "${var.name}-${each.key}-vnet-link"
+  private_dns_zone_id  = azurerm_private_dns_zone.this.id
+  virtual_network_id   = each.value
+  registration_enabled = false
+  tags                 = local.tags
+}
+
 resource "azurerm_postgresql_flexible_server" "this" {
   name                              = var.name
   resource_group_name               = var.resource_group_name
@@ -29,7 +39,10 @@ resource "azurerm_postgresql_flexible_server" "this" {
   geo_redundant_backup_enabled      = false
   tags                              = local.tags
 
-  depends_on = [azurerm_private_dns_zone_virtual_network_link.this]
+  depends_on = [
+    azurerm_private_dns_zone_virtual_network_link.this,
+    azurerm_private_dns_zone_virtual_network_link.additional,
+  ]
 }
 
 resource "azurerm_postgresql_flexible_server_configuration" "tls" {

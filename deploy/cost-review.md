@@ -34,7 +34,7 @@ For the user's shortlisted nodes, observed Linux retail prices per VM-hour were:
 
 ### Belgium Central and Sweden Central — selected configuration
 
-Public retail lookup reported $0.115/hour for one Linux `Standard_D2s_v4` VM in Belgium Central. This is compute only, not a subscription quote or proof that AKS can allocate it. Web PubSub is configured in Sweden Central; its Free-tier eligibility and cross-region egress charges are unverified. Other Belgium/Sweden trial rates still need review, and billing can continue for retained resources after AKS is removed.
+Public retail lookup reported $0.115/hour for one Linux `Standard_D2s_v4` VM in Belgium Central. This is compute only, not a subscription quote or proof that AKS can allocate it. Web PubSub and PostgreSQL are configured in Sweden Central, with PostgreSQL connected to Belgium over inter-region VNet peering. Web PubSub Free-tier behavior, PostgreSQL capacity, inter-region peering/data-transfer charges and application latency remain unverified. Other Belgium/Sweden trial rates still need review, and billing can continue for retained resources after AKS is removed.
 
 ## Required inputs and line items
 

@@ -20,14 +20,19 @@ dependency "network" {
   config_path = "../network"
 }
 
+dependency "postgresql_network" {
+  config_path = "../postgresql-network"
+}
+
 # The operator supplies TF_VAR_administrator_password securely; it is ephemeral
 # and must not be passed through Terragrunt inputs or written to state.
 inputs = {
   name                           = "chat-${local.env}-${local.subscription_suffix}-pg"
   resource_group_name            = dependency.resource_group.outputs.name
-  location                       = "belgiumcentral"
-  delegated_subnet_id            = dependency.network.outputs.postgresql_subnet_id
+  location                       = "swedencentral"
+  delegated_subnet_id            = dependency.postgresql_network.outputs.postgresql_subnet_id
   virtual_network_id             = dependency.network.outputs.virtual_network_id
+  additional_virtual_network_ids = { sweden = dependency.postgresql_network.outputs.virtual_network_id }
   private_dns_zone_name          = "chat-${local.env}.postgres.database.azure.com"
   postgresql_version             = "17"
   sku_name                       = get_env("POSTGRESQL_SKU")

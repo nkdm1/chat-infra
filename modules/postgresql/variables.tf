@@ -18,6 +18,12 @@ variable "virtual_network_id" {
   type        = string
 }
 
+variable "additional_virtual_network_ids" {
+  description = "Additional VNets linked to the PostgreSQL private DNS zone, keyed by link suffix."
+  type        = map(string)
+  default     = {}
+}
+
 variable "delegated_subnet_id" {
   description = "Subnet delegated to PostgreSQL Flexible Server."
   type        = string
