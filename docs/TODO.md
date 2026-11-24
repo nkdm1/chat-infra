@@ -26,13 +26,14 @@
 - `live/dev/workload-federation`
 - `live/shared/resource-group`
 - `live/shared/container-registry`
+- `live/shared/github-publisher`
 - `live/shared/cosmos-db-account`
 
 There is no `live/prod/` environment yet. These paths show intended configuration only; actual Azure state and spend have not been verified.
 
 ### Checked-in module directories
 
-`aks`, `blob-storage`, `container-registry`, `cosmos-db-account`, `cosmos-db-namespace`, `email-communication-service`, `key-vault`, `network`, `postgresql`, `private-endpoint`, `pubsub`, `redis`, `resource-group`, `workload-identity`, and `workload-federation`.
+`aks`, `blob-storage`, `container-registry`, `cosmos-db-account`, `cosmos-db-namespace`, `email-communication-service`, `github-publisher`, `key-vault`, `network`, `postgresql`, `private-endpoint`, `pubsub`, `redis`, `resource-group`, `workload-identity`, and `workload-federation`.
 
 Module directories are not equivalent to complete modules, environment stacks, or applied resources. Review the older `modules/cosmosdb` against the account/namespace modules before using it.
 
@@ -51,7 +52,7 @@ Module directories are not equivalent to complete modules, environment stacks, o
 - Dev Azure Managed Redis configures TLS, key authentication for the app's single `ioredis` connection, private endpoint/DNS, and disabled public access. `REDIS_SKU` and `REDIS_HIGH_AVAILABILITY` require explicit availability/cost review. The provider exports access keys into state even though no key is output; secure state and provision `REDIS_URL` into Key Vault through a private, approved operator path. DNS, connection compatibility, name availability, and lifecycle remain untested.
 - Dev Web PubSub configures public client connections, private REST, a private endpoint/DNS and a custom workload role. `WEBPUBSUB_SKU` requires explicit cost/availability review. AzureRM ACL lifecycle, private DNS, token issuance, send, disconnect, and readiness permissions still require live verification. The AzAPI service starts with public REST denied, and the separate AzureRM ACL resource manages network ACLs thereafter; test drift, update and destroy behavior before provisioning.
 - `deploy/chat/` contains an untested Helm chart for the app, manual migration and Gateway API route; `deploy/README.md` describes operator prerequisites. NGINX Gateway Fabric and Cloudflare Origin CA/Full (strict) were selected, but controller installation, TLS provisioning, Cloudflare DNS and end-to-end routing remain untested. `live/prod/` stacks are still missing.
-- The `chat-webapp` repo has one GitHub Actions CI workflow for checks/tests; no image-publish or deployment workflow and no Kubernetes deployment/Gateway manifests were found. The app itself has a Dockerfile and working local Compose/emulator setup.
+- The app repo has a checks/tests CI workflow and an uncommitted image-publishing workflow. The latter waits for successful `main` push CI, builds runner and migrator images, uses GitHub OIDC, and does not deploy. The shared GitHub publisher identity restricts trust to `nkdm1/chat` on `main` and grants `AcrPush`; neither identity nor workflow has been tested live. `deploy/chat` contains the infrastructure repo's untested Kubernetes Helm chart.
 - The application code implements Better Auth/PostgreSQL sessions, server-mediated HTTP message writes, PostgreSQL membership authorization, Cosmos persistence, server-to-user Web PubSub events, and Redis/Web PubSub fallbacks. Azure integration has not been runtime-tested in this review.
 
 ## Ordered work
@@ -103,13 +104,13 @@ Module directories are not equivalent to complete modules, environment stacks, o
 - [ ] Add the dev app workload identity/federated Kubernetes service-account credential `chat/chat-app`. Grant only required resource roles; verify Cosmos, Blob, Web PubSub and ACS permissions. Keep CI publish identity, kubelet image-pull identity, and human operator identity separate.
 - [ ] Set Azure configuration from `chat-webapp/.env.example`: `AUTO_PROVISION=false`, no emulator `*_CONNECTION_STRING` values, non-secret settings in ConfigMap, `BETTER_AUTH_SECRET`/`DATABASE_URL`/`REDIS_URL` in Key Vault/CSI, and `COSMOS_DATABASE=chat-dev`.
 - [ ] Complete and validate ACS Email: grant a verified least-privilege send role to the app identity, check the Azure-managed sender and domain association, and test delivery. The user selected Azure-managed domains for both environments. Consider ACS Network Security Perimeter only as optional hardening if subscription support and preview terms are acceptable.
-- [ ] Configure ACR with Entra-only operations: admin account off, no anonymous access, GitHub OIDC identity limited to `AcrPush`, AKS kubelet identity limited to `AcrPull`. Its public endpoint is an intentional exception because the GitHub-hosted runner is outside the VNet.
+- [ ] Validate ACR Entra-only operations: admin account off, no anonymous access, configured GitHub OIDC identity limited to `AcrPush`, and AKS kubelet identity limited to `AcrPull`. Its public endpoint is an intentional exception because the GitHub-hosted runner is outside the VNet.
 
 ### 3. Deploy and validate dev
 
 - [ ] Validate the `deploy/chat` Helm chart: Deployment, Service, ConfigMap, workload service account, SecretProviderClass, HTTPS Gateway/route and ordered one-off migration. It has been rendered locally but not applied; keep one app image and one HTTPS origin.
 - [ ] Install/price NGINX Gateway Fabric and validate Cloudflare Origin CA TLS for `dev.chat.nkdm.io`. Ensure user traffic reaches the app through Gateway only; the Kubernetes API server remains private.
-- [ ] Add a GitHub Actions image workflow: PRs run existing checks; merge to default branch builds and pushes an immutable image tag to ACR using OIDC. Do not auto-deploy or auto-apply OpenTofu.
+- [ ] Review and commit the uncommitted app-repo image workflow separately, set its Azure client/tenant/subscription variables from the approved publisher outputs, and test OIDC publication after preflight. It waits for successful CI on a `main` push, publishes runner/migrator SHA tags and reports immutable digests; it never auto-deploys or applies OpenTofu.
 - [ ] Write manual `dev-start` and `dev-stop` runbooks. Start/prepare required data services; create/recreate AKS; deploy the chosen image; run the `migrator` image target as a one-off Kubernetes Job before rollout; smoke-test; then destroy AKS and any explicitly disposable dev data stacks. Preserve shared Cosmos account/state and any data the team elects to retain.
 - [ ] Verify `/api/health` is process liveness. Verify `/api/ready` only fails for PostgreSQL/Cosmos; Redis and Web PubSub status may be degraded. Test Redis fallback, Web PubSub reconnect/polling, email verification, auth/revocation, conversations, message persistence, attachments, and admin features.
 - [ ] Check the bill after dev sessions and record actual persistent/idle costs. Do not infer that the data services stopped when AKS was destroyed.
