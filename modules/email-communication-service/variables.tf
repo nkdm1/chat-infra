@@ -18,6 +18,16 @@ variable "data_location" {
   default     = "Europe"
 }
 
+variable "resource_group_id" {
+  type        = string
+  description = "Resource group ID used as the custom role assignable scope."
+}
+
+variable "app_principal_id" {
+  type        = string
+  description = "Principal ID of the application workload identity."
+}
+
 variable "resource_group_name" {
   type        = string
   description = "name of the resource group used for this service"
