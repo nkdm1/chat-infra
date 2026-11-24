@@ -17,6 +17,6 @@ dependency "resource_group" {
 inputs = {
   name     = "websecchatacr"
   rg-name  = dependency.resource_group.outputs.name
-  location = "spaincentral"
+  location = "belgiumcentral"
   env      = local.env
 }

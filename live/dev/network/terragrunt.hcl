@@ -15,7 +15,7 @@ dependency "resource_group" {
 }
 
 inputs = {
-  location            = "spaincentral"
+  location            = "belgiumcentral"
   resource_group_name = dependency.resource_group.outputs.name
 
   vnet_name               = "chat-${local.env}-vnet"

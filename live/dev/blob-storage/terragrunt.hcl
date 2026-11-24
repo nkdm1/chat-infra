@@ -23,7 +23,7 @@ dependency "workload_identity" {
 inputs = {
   name             = "chat${local.env}${local.subscription_suffix}st"
   rg-name          = dependency.resource_group.outputs.name
-  location         = "spaincentral"
+  location         = "belgiumcentral"
   app_principal_id = dependency.workload_identity.outputs.principal_id
   env              = local.env
 }

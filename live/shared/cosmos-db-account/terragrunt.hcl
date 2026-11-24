@@ -18,7 +18,7 @@ dependency "resource_group" {
 
 inputs = {
   account_name        = "chat-cosmos-${local.subscription_suffix}"
-  location            = "spaincentral"
+  location            = "belgiumcentral"
   resource_group_name = dependency.resource_group.outputs.name
   free_tier_enabled   = true
   env                 = local.env

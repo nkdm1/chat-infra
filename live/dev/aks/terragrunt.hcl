@@ -25,7 +25,7 @@ dependency "resource_group" {
 
 inputs = {
   aks_name             = "chat-${local.env}-aks"
-  location             = "spaincentral"
+  location             = "belgiumcentral"
   resource_group_name  = dependency.resource_group.outputs.name
   dns_prefix           = "chat-${local.env}-aks"
   aks_subnet_id        = dependency.network.outputs.aks_subnet_id

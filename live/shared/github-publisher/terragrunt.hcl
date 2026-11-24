@@ -17,7 +17,7 @@ dependency "container_registry" {
 inputs = {
   name                = "chat-github-publisher"
   resource_group_name = dependency.resource_group.outputs.name
-  location            = "spaincentral"
+  location            = "belgiumcentral"
   registry_id         = dependency.container_registry.outputs.id
   github_repository   = "nkdm1/chat"
   github_branch       = "main"

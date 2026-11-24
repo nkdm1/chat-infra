@@ -8,7 +8,7 @@ terraform {
 
 inputs = {
   name     = "chat-${local.env}-rg"
-  location = "spaincentral"
+  location = "belgiumcentral"
   env      = local.env
 }
 
