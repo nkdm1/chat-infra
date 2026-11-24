@@ -25,4 +25,7 @@ inputs = {
 
   private_endpoint_subnet_name             = "chat-${local.env}-private-endpoints-subnet"
   private_endpoint_subnet_address_prefixes = ["10.1.2.0/24"]
+
+  postgresql_subnet_name             = "chat-${local.env}-postgresql-subnet"
+  postgresql_subnet_address_prefixes = ["10.1.3.0/24"]
 }

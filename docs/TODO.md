@@ -16,6 +16,7 @@
 - `live/dev/blob-private-endpoint`
 - `live/dev/key-vault`
 - `live/dev/key-vault-private-endpoint`
+- `live/dev/postgresql`
 - `live/dev/email-communication-service`
 - `live/dev/aks`
 - `live/dev/workload-identity`
@@ -28,7 +29,7 @@ There is no `live/prod/` environment yet. These paths show intended configuratio
 
 ### Checked-in module directories
 
-`aks`, `blob-storage`, `container-registry`, `cosmos-db-account`, `cosmos-db-namespace`, `email-communication-service`, `key-vault`, `network`, `private-endpoint`, `resource-group`, `workload-identity`, and `workload-federation`.
+`aks`, `blob-storage`, `container-registry`, `cosmos-db-account`, `cosmos-db-namespace`, `email-communication-service`, `key-vault`, `network`, `postgresql`, `private-endpoint`, `resource-group`, `workload-identity`, and `workload-federation`.
 
 Module directories are not equivalent to complete modules, environment stacks, or applied resources. Review the older `modules/cosmosdb` against the account/namespace modules before using it.
 
@@ -43,7 +44,8 @@ Module directories are not equivalent to complete modules, environment stacks, o
 - The dev ACS stack currently creates an Email Communication Service resource. A verified sender/domain and complete email configuration are not represented by the current stack. ACS has no traditional Private Link endpoint; use authenticated outbound calls and consider Network Security Perimeter only if the subscription supports it without unacceptable preview risk.
 - Dev Blob Storage configures a private `attachments` container, a container-scoped workload role, public access and Shared Key disabled, and a private endpoint/DNS stack. Name availability, private provisioning/management access, and application access are not yet verified.
 - Dev Key Vault configures RBAC, private networking, a workload secrets-reader role, seven-day soft delete, and no purge protection. Provider settings prevent automatic vault purge/recovery. Secret provisioning, CSI access, and name availability still need validation.
-- Dev has no Terragrunt stacks yet for PostgreSQL, Azure Managed Redis, or Web PubSub. Other data-service private endpoints/DNS, a Gateway API controller/route, and `live/prod/` stacks are still missing.
+- Dev PostgreSQL configures a delegated subnet, private DNS, TLS, a `chat` database, and write-only ephemeral administrator password. `POSTGRESQL_SKU` must be selected after availability and cost review; `TF_VAR_administrator_password` must be supplied securely for OpenTofu operations. The application login, private operator access, credentials in Key Vault, lifecycle and backups are not yet tested. Increment the password version input on rotation.
+- Dev has no Terragrunt stacks yet for Azure Managed Redis or Web PubSub. Other data-service private endpoints/DNS, a Gateway API controller/route, and `live/prod/` stacks are still missing.
 - The `chat-webapp` repo has one GitHub Actions CI workflow for checks/tests; no image-publish or deployment workflow and no Kubernetes deployment/Gateway manifests were found. The app itself has a Dockerfile and working local Compose/emulator setup.
 - The application code implements Better Auth/PostgreSQL sessions, server-mediated HTTP message writes, PostgreSQL membership authorization, Cosmos persistence, server-to-user Web PubSub events, and Redis/Web PubSub fallbacks. Azure integration has not been runtime-tested in this review.
 
@@ -88,7 +90,7 @@ Module directories are not equivalent to complete modules, environment stacks, o
 - [ ] Validate the configured dev Cosmos private endpoint/DNS and disabled account public access; add a separate prod private path when prod is built. Confirm the account is eligible for free tier and the aggregate `chat-dev` + `chat-prod` throughput and storage stay within allowances.
 - [ ] Verify the configured dev Cosmos data-plane role for the dev workload identity is scoped to `chat-dev` and cannot access prod. The identity and database role are configured but not deployed or tested.
 - [ ] Preserve an independent shared Cosmos account state stack. Implement dev database teardown/recreation so destroying `live/dev/cosmos-db` cannot destroy the shared account or `chat-prod`.
-- [ ] Add private PostgreSQL Flexible Server/database stack and private VNet connectivity; configure TLS, backups/storage, secret-backed credentials, and a tested start/stop/delete/recreate policy.
+- [ ] Complete and validate private PostgreSQL: select an available/cost-reviewed SKU, configure a least-privilege application login and secret-backed `DATABASE_URL`, verify private operator access and TLS/backups, and test start/stop/delete/recreate. The server, database, delegated subnet and private DNS are configured but not deployed.
 - [ ] Validate the configured private Blob Storage, `attachments` container, private endpoint/DNS, and container-scoped workload role. Verify operator provisioning and data-plane access with public access and Shared Key disabled; check the account name is available.
 - [ ] Add Azure Managed Redis with private endpoint/DNS, public access disabled, TLS/auth configuration supported by the selected SKU, and a cost-tested lifecycle. Preserve the app's Redis fallbacks; Redis is not the authorization source of truth.
 - [ ] Validate the configured dev Key Vault private endpoint/DNS, workload identity and CSI access; establish a private operator path to provision secrets. Dev uses 7-day soft delete; purge protection is disabled for both environments by user decision. Choose prod retention before creation.

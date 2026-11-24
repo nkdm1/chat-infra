@@ -32,3 +32,13 @@ variable "private_endpoint_subnet_address_prefixes" {
   type        = list(string)
   description = "CIDR prefixes for the dedicated private-endpoint subnet."
 }
+
+variable "postgresql_subnet_name" {
+  type        = string
+  description = "Name of the PostgreSQL Flexible Server delegated subnet."
+}
+
+variable "postgresql_subnet_address_prefixes" {
+  type        = list(string)
+  description = "CIDR prefixes for the PostgreSQL delegated subnet."
+}
