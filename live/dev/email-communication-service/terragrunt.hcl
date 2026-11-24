@@ -15,8 +15,9 @@ dependency "resource_group" {
 }
 
 inputs = {
-  name                = "chat-${local.env}-email"
-  resource_group_name = dependency.resource_group.outputs.name
-  data_location       = "Europe"
-  env                 = local.env
+  name                       = "chat-${local.env}-email"
+  communication_service_name = "chat-${local.env}-acs"
+  resource_group_name        = dependency.resource_group.outputs.name
+  data_location              = "Europe"
+  env                        = local.env
 }

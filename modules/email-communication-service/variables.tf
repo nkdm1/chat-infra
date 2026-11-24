@@ -7,6 +7,11 @@ variable "name" {
   }
 }
 
+variable "communication_service_name" {
+  type        = string
+  description = "Name of the linked Communication Service."
+}
+
 variable "data_location" {
   type        = string
   description = "region where the data is stored at rest"
