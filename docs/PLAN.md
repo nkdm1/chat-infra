@@ -1,90 +1,119 @@
-# Chat application — implementation and deployment plan
+# Project plan — desired state
 
-## Status and source of truth
+> **Authority:** this is the project's desired architecture and infrastructure plan. [`todo.md`](todo.md) is the implementation/status list. Application behavior is described in [`chat-webapp/docs/architecture.md`](../../chat-webapp/docs/architecture.md); the app deployment reference is [`chat-webapp/docs/azure-deployment.md`](../../chat-webapp/docs/azure-deployment.md). Those references must agree with the decisions here. The app repo's `PLAN.md` and `AGENT-IMPLEMENTATION.md` are navigation/agent documents, not alternate architecture plans.
 
-**Azure budget constraint:** this project has at most **$100 USD in Azure for Students credits**. This is a hard ceiling. Every Azure resource must be free when eligible or use the cheapest viable configuration. Verify current eligibility, remaining balance, regional pricing, and full lifecycle/dependency costs before planning or applying; include idle/retained charges and keep a safety margin. Cost alerts are not spending caps. Do not provision a change that could reach or exceed the ceiling.
+## Confirmed decisions and constraints
 
-The chat application has been implemented and runs locally against a Docker Compose service stack. This document records the implemented application architecture and its intended Azure deployment; it is not a proposal to replace the working app with a new frontend/backend split.
+- **Hosting:** one Next.js application serves both UI and API from one Docker image on AKS. Do not split it onto Azure Static Web Apps or add a separate backend service.
+- **Sessions:** keep Better Auth with PostgreSQL-backed sessions. Do not introduce custom access JWTs or refresh tokens.
+- **Message writes:** browsers write through authenticated HTTPS API routes. The server validates and authorizes against PostgreSQL, persists messages to Cosmos DB, then publishes realtime notifications. Do not use Web PubSub event ingress/webhooks for chat writes.
+- **Authorization:** PostgreSQL remains authoritative for conversation membership. Do not add a Redis permission cache or transactional outbox unless a later, measured requirement is explicitly approved.
+- **Realtime:** browsers receive Web PubSub events only. The app backend issues short-lived client URLs after authentication; the client has no send/write roles. The backend publishes via `sendToUser` after persistence.
+- **Cosmos topology:** one shared Cosmos DB account, with isolated `chat-dev` and `chat-prod` databases and environment-specific identities/access. The shared account is not an excuse to share application data or credentials.
+- **Routing and names:** use Gateway API for the public app route. Cloudflare manages DNS: `dev.chat.nkdm.io` is dev; `chat.nkdm.io` is the prod showcase.
+- **Control plane:** AKS Kubernetes API server is private. Operators initially manage the cluster manually with Azure `az aks command invoke` / Run Command, not a public Kubernetes API endpoint.
+- **Registry:** ACR may use its lower-cost public endpoint because GitHub-hosted CI must publish images. Require Entra authentication; disable the admin account and anonymous pulls; grant only CI `AcrPush` and the AKS kubelet `AcrPull`.
+- **Network boundary:** data services use private networking and have public access disabled where supported. The deliberate exceptions are described under [Network exposure](#network-exposure).
+- **Deployment:** CI tests pull requests; a merge to the default branch builds and publishes an immutable image to ACR using GitHub OIDC. OpenTofu changes and AKS rollouts are reviewed and run manually; merges never auto-apply infrastructure or auto-deploy the app.
+- **Region:** use `polandcentral` for regional resources unless a required service/SKU is unavailable or fails the cost review there. In that case, stop and review the region change before provisioning.
+- **Lifecycle:** dev data may be destroyed because it is disposable. Prod data/services should be retained between showcases by default if the budget allows. AKS is stateless and may be destroyed/recreated in either environment. Destroying AKS does not stop or delete independent PaaS resources.
+- **Budget and schedule:** the whole project has a hard **$100 USD Azure for Students credit ceiling**. Dev is used about 2–3 two-hour sessions/week; prod is a roughly two-hour weekly showcase. Neither environment is intended to run 24/7. The credit limit—not an assumption that a service is cheap—decides what can be retained.
 
-For code-level behavior, API routes, security controls, configuration names, and service degradation, see [`architecture.md`](architecture.md). For Azure resource setup and deployment steps, see [`azure-deployment.md`](azure-deployment.md). Keep those documents and this plan aligned when behavior changes.
+## Application architecture
 
-## Implemented application architecture
-
-A single Next.js application serves both the browser UI and server-side API. The browser makes authenticated HTTPS requests to the app for all writes. It receives real-time updates over Web PubSub; it does not send chat messages over the socket. The app persists messages before sending notifications and falls back to polling when realtime is unavailable.
+The application is one Next.js UI/API process. Locally it runs with Docker Compose emulators; Azure changes endpoint/configuration and identity, not the app's architectural shape.
 
 ```text
-Browser ── HTTPS /api (reads and writes) ──▶ Next.js app (UI + API)
-   ▲                                                ├── PostgreSQL: accounts and relationships
-   │                                                ├── Cosmos DB: messages
-   │                                                ├── Blob Storage: attachments
-   │                                                ├── Redis: rate limits and ephemeral/derived state
-   └──────── WebSocket receive-only ── Web PubSub ◀─┘
+Browser ── HTTPS (all reads/writes, auth) ──▶ Next.js app on AKS
+   ▲                                              ├── PostgreSQL: auth + relational data
+   │                                              ├── Cosmos DB: durable messages
+   │                                              ├── Blob Storage: attachments
+   │                                              ├── Redis: rate limits + ephemeral/derived data
+   │                                              └── ACS Email: verification mail
+   └──── public WSS, short-lived receive-only URL ─ Web PubSub ◀── server sends events
 
-Email: Mailpit locally; Azure Communication Services Email in Azure
+Internet ── HTTPS ──▶ Cloudflare DNS ──▶ public Gateway API ──▶ AKS app
 ```
 
-| Concern | Local development | Azure target | Application integration |
+| Concern | Local development | Azure target | Owner / behavior |
 |---|---|---|---|
-| UI and API | One Next.js app, `localhost:3000` | One container/image on AKS, port 3000 | Same-origin routes and cookies; no separate frontend service |
-| Accounts, friendships, groups, read positions, reactions, reports | PostgreSQL 17 | Azure Database for PostgreSQL Flexible Server | Drizzle ORM |
-| Messages | Cosmos DB emulator | Cosmos DB for NoSQL | Cosmos SDK; `messages` container partitioned by `/conversationId` |
-| Attachments | Azurite | Azure Blob Storage | Blob SDK; private container, attachment access through app API |
-| Realtime delivery | Web PubSub emulator | Azure Web PubSub | Server sends to users; browser connection is receive-only |
-| Rate limits, presence, typing, unread state | Redis 7 | Azure Managed Redis | Redis protocol client; Redis is not the durable source of truth |
-| Transactional email | Mailpit | ACS Email | SMTP locally; ACS endpoint and managed identity in Azure |
+| UI and API | One Next.js app | Same app image on AKS, port 3000 | One public HTTPS origin per environment; Better Auth cookies and same-origin write checks remain intact. |
+| Accounts, sessions, friends, groups, read positions, reactions, reports | PostgreSQL | Azure Database for PostgreSQL Flexible Server | Drizzle and Better Auth. PostgreSQL is the membership/authorization source of truth. |
+| Messages/history | Cosmos DB emulator | Cosmos DB for NoSQL | `messages` container, `/conversationId` partition key; `chat-dev` and `chat-prod` are separate databases in the shared account. |
+| Attachments | Azurite | Azure Blob Storage | Private `attachments` container, accessed through the app. |
+| Realtime | Web PubSub emulator | Azure Web PubSub | Browser receives; backend sends server events with `sendToUser`. Polling is the fallback. |
+| Rate limits, presence, typing, unread/derived state | Redis | Azure Managed Redis | Best-effort/derived data with application fallbacks; not authoritative membership or durable message data. |
+| Verification email | Mailpit | ACS Email | Server-to-service outbound API call using workload identity. This is not an inbound application webhook. |
 
-The local emulators are provided by `docker-compose.yml` and are accessed through the same service SDKs/protocols used by the app in Azure. The app also supports running directly with `pnpm dev` while these services run in Docker. This full local stack is an implemented development environment, not just a collection of unit-test fakes.
+### Request and failure behavior
 
-## Implemented behavior and invariants
+- All chat writes use authenticated same-origin HTTPS API routes. The server checks the user's Better Auth session and conversation membership, persists the message, then publishes an event. The browser cannot write directly to Cosmos or send messages through Web PubSub.
+- The backend returns a short-lived Web PubSub client URL only after authenticating the user. A browser can open its WSS connection with that URL, but cannot mint a URL for another identity or send/write via the connection. Do not log or cache the bearer URL.
+- `GET /api/health` is liveness: it checks that the process is running. `GET /api/ready` fails only when PostgreSQL or Cosmos is down. Redis and Web PubSub report status but may degrade; Redis has fallbacks and the UI polls while Web PubSub is disconnected. A smoke test with all services healthy should still verify their status, but their being `ok` is not the readiness gate.
+- Keep the current Better Auth/PostgreSQL session model, `sendToUser` fan-out, direct PostgreSQL authorization, and Redis fallbacks. Do not implement proposed JWT, event-webhook, Web PubSub group, permission-cache, or outbox designs from older plans.
 
-- Better Auth uses PostgreSQL-backed database sessions. The app does not implement custom JWT access/refresh tokens.
-- API routes authenticate the session, validate and authorize requests, apply origin checks to writes, enforce payload/rate limits, and return structured errors.
-- Message writes go through HTTPS. The server validates/sanitizes content and checks conversation membership, stores the message in Cosmos DB, then sends realtime updates. Clients receive over Web PubSub and poll if realtime is unavailable.
-- Cosmos messages use `/conversationId` as the partition key and an idempotent sender/client-message identifier. Edits and deletes use ETags; deletes are soft.
-- PostgreSQL owns account and relational data. Cosmos owns durable messages. Redis is used for rate limiting, presence, typing, and unread state; optional Redis-dependent behavior can degrade without losing durable account/message data.
-- Attachments are size/type checked, stored under random blob names, and served through the app. Moderation reports preserve message snapshots; admin actions are audited.
-- Liveness/readiness routes are `/api/health` and `/api/ready`. PostgreSQL and Cosmos are readiness-critical; optional service failures are reported and handled according to the architecture document.
+## Environment and resource topology
 
-## Azure hosting and configuration
+### Dev first
 
-### Selected hosting topology
+Use a dedicated `live/dev/` environment and unique Terragrunt state keys. Complete and test dev before creating prod. Keep local Docker Compose as the normal local development path; use real Azure dev resources for cloud integration and end-to-end tests.
 
-Deploy the **whole Next.js application (frontend and API together) as one Docker image on AKS**, behind one HTTPS hostname served through a Kubernetes Gateway API controller. Azure Static Web Apps (SWA) plus a separate AKS API is not the selected architecture: it would split the app and introduce cross-origin/cookie routing concerns without a need in the implemented application. Do not add an SWA deployment pipeline or separate frontend hosting unless the architecture is deliberately reviewed and the app is changed to support it.
+The app image is stateless. Environment state, runtime configuration, identities, and data services are separate from the AKS cluster so the cluster can be recreated without losing the retained prod data. Prod uses the proven dev module patterns with distinct names, state, identities, secrets, databases, and app data. The only deliberately shared runtime resource is the Cosmos account.
 
-For new traffic routing, use Gateway API resources (`GatewayClass`, `Gateway`, and `HTTPRoute`) with a compatible controller; do not create legacy Kubernetes `Ingress` resources. The Kubernetes Ingress API is frozen and no longer being developed, but is not formally deprecated or scheduled for removal; Gateway API is the recommended successor. Gateway API resources alone do not implement traffic handling—the controller and its cost must be selected and reviewed separately. See the [Kubernetes Gateway API documentation](https://kubernetes.io/docs/concepts/services-networking/gateway/).
+### Cosmos DB
 
-The same-origin host is important for Better Auth cookies, CSRF origin checks, and verification links. Use the public origin as `BETTER_AUTH_URL`. The app has no `NEXT_PUBLIC_*` runtime configuration and the same image should run in every environment.
+The shared account is created once and remains separate from both environment database stacks. Dev uses `chat-dev`; prod uses `chat-prod`; both use a `messages` container with the same partition-key contract. The app's local `.env.example` may keep its emulator default `chat`; Azure must set the environment-specific database name. Set an environment-specific Cosmos data-plane identity and scope it to that environment's database/container. Verify that the account is eligible for Cosmos free tier and that the combined provisioned throughput/storage remain within the account allowance.
 
-### Secrets and non-secret configuration
+## Network exposure
 
-- Keep runtime secrets in Azure Key Vault and expose them to the AKS pod through the Secrets Store CSI Driver, synced to a Kubernetes Secret and made available to the container at runtime.
-- Secret values include `BETTER_AUTH_SECRET`, `DATABASE_URL`, and `REDIS_URL`; `SMTP_PASS` is needed only if SMTP is used. Never put secrets in a ConfigMap, image, build argument, source control, or OpenTofu output.
-- Put non-secret endpoints and application settings in a ConfigMap. Use managed/workload identity for Cosmos DB, Blob Storage, Web PubSub, and ACS where supported. PostgreSQL and Redis authentication remain explicit secret-backed connection configuration.
-- Unset local emulator `*_CONNECTION_STRING` settings in Azure. Set Azure endpoints/account URLs instead. Keep `AUTO_PROVISION=false` in Azure; OpenTofu provisions Azure data resources.
-- The runtime variable names are maintained in [`../../chat-webapp/.env.example`](../../chat-webapp/.env.example); Azure examples are in [`azure-deployment.md`](azure-deployment.md).
+Network policy distinguishes **network reachability** from **application authorization**. A public DNS name does not make an operation anonymous, and managed identity does not by itself make a public endpoint private.
 
-### Deployment sequence
+### Public entry paths and constrained exceptions
 
-1. Provision the Azure resources and identities with OpenTofu, including the Key Vault, ACR, AKS, PostgreSQL, Cosmos DB, Blob Storage, Redis, Web PubSub, and ACS Email resources. Confirm networking, DNS/TLS, role assignments, and manual ACS sender-domain verification.
-2. Store runtime secrets in Key Vault; provide non-secret settings through the `chat-config` ConfigMap. Configure the CSI driver and runtime workload identity.
-3. Build and push the app image to ACR. Run the separate `migrator` image target as a one-off Kubernetes Job before rolling out the application image.
-4. Deploy one app container with the `chat-app` service account, port 3000, configuration from the ConfigMap and Key Vault-backed Secret, and probes for `/api/health` and `/api/ready`.
-5. Route the HTTPS domain to the app and set `BETTER_AUTH_URL` to that exact public origin. Smoke-test registration/email verification, messaging, attachments, and service readiness.
+1. **App:** internet users reach the app only over HTTPS through the public Gateway API route. Cloudflare hosts DNS for `dev.chat.nkdm.io` and `chat.nkdm.io`; enforce TLS to the app and set `BETTER_AUTH_URL` to each exact origin.
+2. **Web PubSub:** public `ClientConnection`/WSS is required because browsers read live events directly. Allow that request type from clients, but issue only short-lived backend-minted receive-only client URLs. Deny public REST/server operations except the server REST calls from the cluster's fixed egress IP. The backend—not the browser—sends events. Keep the egress IP in a network stack that survives AKS recreation.
+3. **ACR:** the registry endpoint is publicly addressable for GitHub-hosted image publishing and AKS image pulls, but operations require Entra identity. No anonymous pulls or admin credentials; assign only `AcrPush` to the build identity and `AcrPull` to the AKS kubelet identity.
+4. **ACS Email:** the app makes outbound HTTPS calls using its workload identity and a least-privilege email-sending role. ACS has no traditional Private Link endpoint. A Network Security Perimeter may be used as optional hardening if the subscription supports it without unacceptable preview/operational risk; it is not a prerequisite. Internet users receive no ACS identity/role and cannot send mail through the app's identity.
 
-The Azure deployment guide documents concrete resource settings, role assignments, environment values, and smoke tests. Infrastructure deployment and application rollout must be treated as separate operational steps; do not imply resources exist merely because the app supports them.
+### Private paths
 
-## Explicit decisions versus the earlier proposal
+- Make the AKS control plane private; do not expose the Kubernetes API server to the public internet. Use `az aks command invoke` / Run Command for operator access initially, with the required Azure RBAC actions; this is a manual operations path, not a deployment runner.
+- Use service-native private connectivity for PostgreSQL and Private Endpoints/private DNS for Cosmos DB, Blob Storage, Azure Managed Redis, and Key Vault. Disable their public network access wherever the service supports it. Link private DNS to each environment VNet; the shared Cosmos account must resolve privately from both dev and prod networks.
+- Keep CI and app identities separate. Private endpoint rules do not replace workload identity/RBAC; public endpoint authentication does not replace network restrictions where those are available.
+- The Gateway API controller, Cloudflare TLS/proxy mode, stable public Gateway IP, AKS outbound/static egress IP, private DNS, and exact endpoint resources must be costed and tested before apply. The app Gateway ingress IP and outbound egress IP have different purposes; neither should be assumed stable through cluster recreation unless explicitly managed outside the cluster.
 
-- **Hosting:** one unified Next.js UI/API on AKS replaces the earlier SWA frontend + AKS API split.
-- **Secrets:** Key Vault plus the AKS Secrets Store CSI Driver replaces putting sensitive values in deployment configuration. ConfigMaps contain non-secret values only.
-- **Local development:** Docker Compose emulates PostgreSQL, Cosmos DB, Blob Storage, Web PubSub, Redis, and email locally; Mailpit captures email. Local emulation is supported and documented.
-- **Realtime:** HTTPS is the only message-write path; Web PubSub is receive-only for browser clients. The current app does not use a Web PubSub webhook to accept client message events.
-- **Authentication:** Better Auth database sessions are implemented; a custom JWT/refresh-token scheme is not planned for this baseline.
-- **Authorization/cache scope:** PostgreSQL checks relationships directly. There is no Redis permission cache or transactional outbox in the current implementation.
-- **Azure access:** use managed identity/workload identity for supported Azure data-plane services; do not set emulator connection strings or local auto-provision behavior in Azure.
+Official constraints to verify during implementation: [Web PubSub network access control](https://learn.microsoft.com/en-us/azure/azure-web-pubsub/howto-secure-network-access-control), [Web PubSub private endpoints](https://learn.microsoft.com/en-us/azure/azure-web-pubsub/howto-secure-private-endpoints), [ACS Network Security Perimeter](https://learn.microsoft.com/en-us/azure/communication-services/quickstarts/network-security-perimeter), [ACR private networking/SKUs](https://learn.microsoft.com/en-us/azure/container-registry/container-registry-skus), and [private AKS operator access](https://learn.microsoft.com/en-us/azure/aks/access-private-cluster).
 
-These choices are reflected in the companion `architecture.md` and `azure-deployment.md` in this directory and must not be replaced by superseded architecture text in older planning notes.
+## Identity, secrets, and runtime configuration
 
-## Current infrastructure status and next work
+- Use an AKS workload identity for the app service account `chat/chat-app`, with only the data-plane permissions needed for its environment. Use the AKS kubelet identity for ACR pulls. Keep GitHub OIDC image-push identity and human OpenTofu operator identity separate.
+- Use Key Vault + AKS Secrets Store CSI Driver for runtime secrets. Keep non-secret settings in a ConfigMap. Never commit secret values, place them in images/build args, expose them through browser variables, or emit them in OpenTofu outputs/logs.
+- Runtime secrets include `BETTER_AUTH_SECRET`, `DATABASE_URL`, and `REDIS_URL`; `SMTP_PASS` is unnecessary when ACS is used. PostgreSQL and Redis credential/auth modes must match the selected Azure service configuration.
+- Azure uses workload identity/managed identity where supported for Cosmos, Blob Storage, Web PubSub, and ACS. No local emulator `*_CONNECTION_STRING` values in Azure; set `AUTO_PROVISION=false`.
+- Set environment-specific `COSMOS_DATABASE`, endpoints, hub/container names, `EMAIL_PROVIDER=acs`, and `BETTER_AUTH_URL`. Do not introduce `NEXT_PUBLIC_*` values.
 
-Application behavior and the local developer environment are implemented. The checked-in infrastructure repository is not yet the complete Azure topology: it includes a dev resource-group stack and reusable resource-group and ACS Email modules, while the Azure deployment guide describes the intended broader deployment. Continue infrastructure work against that deployment guide, preserving its single-app AKS and Key Vault design. Verify actual Azure state before assuming a resource or role has been deployed.
+## Provisioning, delivery, and operations
+
+1. Before any plan/apply, verify the explicit target subscription, remaining credit, region/SKU availability, quotas/free tiers, remote-state backend, and full lifecycle costs.
+2. Run OpenTofu manually: inspect/review plans and apply only the approved stack. CI may run formatting/validation but never applies infrastructure.
+3. GitHub Actions runs app checks on PRs. On merge to the default branch, build and push an immutable/versioned app image to ACR with OIDC. Do not auto-roll out to AKS.
+4. Manually create/start the AKS cluster for a session, deploy the app with environment configuration, run the reviewed migration image as a one-off Kubernetes Job before rollout, and validate Gateway API/TLS. With the private control plane, use the approved `az aks command invoke` workflow.
+5. Destroy/recreate AKS between use windows when cost-effective. Destroying AKS does **not** stop independent databases, Redis, Storage, Cosmos, ACS, ACR, Private Endpoints, DNS, or IP resources. Keep prod data services between weekly showcases only while they fit the aggregate credit limit. Dev data is disposable and may be destroyed; destroying `chat-dev` must never destroy the shared Cosmos account or `chat-prod` data.
+6. Maintain separate `dev-start`/`dev-stop` and `showcase-start`/`showcase-stop` procedures. Destroy only explicitly selected stacks; never use a broad `run-all destroy` as a stop procedure. Verify the actual Azure bill after sessions.
+
+## Cost and acceptance criteria
+
+The $100 limit is total project credit, **not a monthly allowance and not $100 per environment**. Include compute runtime and everything billed while stopped/idle/retained: PostgreSQL, Redis, Cosmos throughput/storage beyond free limits, private endpoints/data processing, IPs/load balancers, DNS, ACR, Key Vault, backups, logs, state storage, and egress. Budgets/alerts notify but are not spending caps. Keep a safety margin; stop and review if the estimate can exceed remaining credit. Do not assume AKS is the only material cost.
+
+The desired project state is reached when:
+
+- Dev and prod have separate state, app identities, credentials, and application data; shared Cosmos is the only deliberate shared runtime account.
+- Only the app Gateway and receive-only Web PubSub client connection accept intended public traffic. Data stores use private connectivity/public access disabled. ACR and ACS public endpoint exceptions are identity-restricted as specified above.
+- The app runs as one image on AKS, is reachable at its environment hostname over HTTPS, uses Better Auth sessions, private service endpoints, and server-mediated message writes.
+- Authenticated message writes are persisted before server push; browser Web PubSub credentials are short-lived and receive-only; Redis/Web PubSub outages degrade as the app currently specifies.
+- The dev AKS cluster can be created, deployed, smoke-tested, and destroyed without removing retained shared/prod state. Prod can be resumed for a weekly showcase with its data intact when budget allows.
+- No resource is applied until a complete cost/availability review demonstrates the plan can remain under the $100 total-credit ceiling.
+
+## Related application contract
+
+The app repository is the source for runtime variable names and local setup: [`chat-webapp/.env.example`](../../chat-webapp/.env.example) and [`chat-webapp/README.md`](../../chat-webapp/README.md). Its architecture/deployment references are supporting detail; this plan is authoritative if wording differs.

@@ -155,7 +155,7 @@ with RoutedDiagram(
     pipeline = service(Pipelines, "pipeline to be designed", 290, -70)
     pipeline_target = anchor("pipeline_target", 290, 80)
 
-    # docs/TODO.md plans monitoring (logs, diagnostics, alerts, retention), but
+    # docs/todo.md plans monitoring (logs, diagnostics, alerts, retention), but
     # coverage and implementation are undecided. Do not imply wired telemetry.
     monitoring = service(Monitor, "Azure Monitor\n", 640, 780)
 
