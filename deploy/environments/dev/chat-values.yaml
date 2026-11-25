@@ -1,0 +1,23 @@
+# Non-secret dev values for the chat release (as deployed 2026-11-25).
+# Contains digests and identifiers only. Never add credentials, keys or passwords.
+image: "websecchatacr.azurecr.io/chat@sha256:f4375e4d33736a6050117db464070e6b538045295c606957f483e5ba9ab77fcd"
+migrationImage: "websecchatacr.azurecr.io/chat-migrator@sha256:d1a7f7625984a9b57baf0548c81ec627dab881ee7ba1a3f74e948100918f633e"
+app:
+  enabled: true
+migration:
+  enabled: false
+  jobName: chat-db-migrate-5546c94
+workloadClientId: "f8bca81c-3476-450f-9ab8-a6f490fae112"
+tenantId: "d0da435b-a7e7-4d74-a4ae-f72cf8f3b2db"
+keyVaultName: "chat-dev-cf816eae-kv"
+hostname: "chat.nkdm.io"
+tlsSecretName: "chat-tls"
+gatewayPublicIpName: "chat-dev-vnet-gateway-ip"
+gatewayPublicIpResourceGroup: "chat-dev-rg"
+config:
+  cosmosEndpoint: "https://chat-cosmos-cf816eae.documents.azure.com:443/"
+  cosmosDatabase: "chat-dev"
+  blobEndpoint: "https://chatdevcf816eaest.blob.core.windows.net/"
+  webPubSubEndpoint: "https://chat-dev-cf816eae-wps.webpubsub.azure.com"
+  acsEndpoint: "https://chat-dev-acs.europe.communication.azure.com"
+  acsSenderAddress: "DoNotReply@56d14771-a18f-48cd-b308-c7f85d6d543f.azurecomm.net"
