@@ -1,0 +1,38 @@
+# Runtime secret provisioning: dev record and automation requirements
+
+This records the dev setup and requirements for future automation, **not an implemented or tested production runbook**. Secrets were provisioned outside Terraform. Never put secret values, credentials, bearer tokens, private keys or connection strings in Git, CI logs, terminal recordings, Terraform variables/state, shell history or support tickets. The assistant checked secret **names** only, not values.
+
+## Dev resources and operator path
+
+- The app Key Vault `chat-dev-cf816eae-kv` is in Belgium Central, uses Azure RBAC and has public network access disabled. Its private endpoint is in the Belgium VNet. The private DNS zone `privatelink.vaultcore.azure.net` is linked to both the Belgium app VNet and the Sweden PostgreSQL VNet. From the temporary Swedish operator VM the vault resolved to `10.1.2.6` and port 443 was reachable. Network reachability alone is not authorization.
+- The temporary operator VM `chat-dev-operator` is in Sweden Central, uses a system-assigned identity and has no public IP. Browser SSH through Bastion Developer was used. Its guest login required a manual repair; see `docs/operator-vm-incident.md`. The VM, disk and networking can continue to incur charges until explicitly removed.
+- `live/dev/operator-secret-access` was applied to grant that VM identity `Key Vault Secrets Officer` at the dev vault scope. This **broad** built-in role can read, write, delete and purge vault secrets. The VM successfully used its managed identity and the Key Vault REST API over the private path. The role remained assigned at the time of this record and must be removed through a separately reviewed destroy plan when no longer needed.
+- `live/dev/operator-redis-access` temporarily defined a custom role containing only `Microsoft.Cache/redisEnterprise/databases/listKeys/action` and assigned it to the VM identity at the `default` Redis database scope. A test returned HTTP 200 and confirmed a primary key existed without displaying it. The user subsequently destroyed the role assignment and definition; state and Azure role checks found neither. Listing the keys exposes both Redis access keys to the VM identity and administrators, even though the role does not grant key regeneration or general management.
+
+The dev app identity has vault-wide `Key Vault Secrets User` access. **Never store the PostgreSQL administrator password in this app-readable vault.** Its separate administrator password is kept by the operator; see `docs/postgresql-provisioning.md` for SQL and future automation requirements.
+
+## Secrets created by the user
+
+The user's interactive Python steps on the operator VM used managed-identity tokens held in process memory, sent HTTPS requests to the private Key Vault endpoint, avoided printing tokens and values, and checked secret names before writing. The `database-url` step accepted the **app** password at hidden prompts; it was not supplied in command arguments. The Redis step fetched keys from the Azure management API in memory, and the Better Auth secret was generated locally on the VM. Both steps reported HTTP 200.
+
+| Key Vault secret | Dev setup recorded | Intended application use |
+| --- | --- | --- |
+| `database-url` | `chat_app` connection string for the private Swedish `chat` database, with password URL-encoded and `sslmode=verify-full` | PostgreSQL for app and migrations |
+| `redis-url` | TLS `rediss://` URL for the dev Managed Redis host and port `10000`, using its `default` username and an access key | Redis cache/presence/rate-limiting |
+| `better-auth-secret` | A new `secrets.token_urlsafe(32)` value generated on the VM | Better Auth signing/encryption secret |
+
+A metadata-only check confirmed all three names exist. The assistant did not retrieve their values. This **does not prove** that the stored values are correct, that AKS CSI or the app identity can read them, that Redis or PostgreSQL connections work from the app, or that TLS certificates/hostnames are verified by the actual application drivers. Those are pending end-to-end checks. The Redis URL uses a live access key; anybody able to read it can authenticate to Redis if they also have network access.
+
+The Helm chart's `SecretProviderClass` maps those three vault secrets into a Kubernetes Secret named `chat-runtime`. This means values will also be available to authorized Kubernetes principals and in the cluster's secret storage after synchronization; review RBAC, encryption and deletion behavior, not just Key Vault permissions.
+
+## Requirements for future automation
+
+1. Use distinct environments, vaults, identities and credentials. Provision private endpoints and DNS first; verify expected private resolution, TLS and managed-identity authorization from the actual execution environment. Never weaken public network access merely to bootstrap secrets.
+2. Make creation and rotation explicit and idempotent. Do **not** regenerate Better Auth secrets, replace database passwords or rotate Redis keys on routine reruns. Before writing, inspect secret metadata and fail on unexpected existing state. The interactive dev scripts used check-then-write; that is **not atomic** against concurrent writers. Define concurrency control and a recovery procedure for partial writes. Changing Better Auth secrets can invalidate sessions or otherwise affect users.
+3. Use short-lived, vault- and resource-scoped operator identities. Prefer a custom Key Vault role granting only the necessary data actions over the broad Secrets Officer role where feasible, and separately scope Redis key-read access to the target database. Account for Azure RBAC propagation; remove temporary assignments and custom roles after provisioning, then verify revocation. Restrict access to the operator VM and its managed identity.
+4. Retrieve the PostgreSQL app password and Redis access key through approved channels without exposing them in command arguments, shell history, logs, Terraform state or chat. Build URLs with correctly encoded userinfo and use TLS. Never put the PostgreSQL **administrator** credential in the app-readable vault. Do not print Key Vault response bodies, which can contain secret values, or bearer tokens.
+5. Generate the Better Auth secret with a cryptographically secure random source of sufficient entropy. Retain it in the appropriate vault for the required environment lifetime; define explicit rotation and recovery behavior before production.
+6. For Ansible or similar automation, mark secret-bearing tasks `no_log: true`, but do not treat that as sufficient: review remote temp files, transport, process arguments and environments, fact caching, failure output and cleanup. Use protected memory or securely permissioned short-lived files where unavoidable. Do not embed secrets in playbooks or inventory. Test permissions, failure paths and repeat runs without printing values.
+7. After writing, check **metadata only** to confirm required secret names exist. Separately validate vault access through the intended workload identity, CSI synchronization, actual PostgreSQL/Redis connections, TLS verification, migrations and app behavior. Test that temporary permissions and operator access are removed. Record verification without logging secrets.
+
+No future production scripts have been implemented or validated by this document. Before teardown or rotation, review data loss, session invalidation, recovery and cost implications explicitly.
