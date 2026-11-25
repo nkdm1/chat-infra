@@ -5,7 +5,7 @@ resource "azurerm_private_dns_zone" "this" {
 }
 
 resource "azurerm_private_dns_zone_virtual_network_link" "this" {
-  name                 = "${var.name}-vnet-link"
+  name                 = "${local.dns_link_name_prefix}-vnet-link"
   private_dns_zone_id  = azurerm_private_dns_zone.this.id
   virtual_network_id   = var.virtual_network_id
   registration_enabled = false
@@ -15,7 +15,7 @@ resource "azurerm_private_dns_zone_virtual_network_link" "this" {
 resource "azurerm_private_dns_zone_virtual_network_link" "additional" {
   for_each = var.additional_virtual_network_ids
 
-  name                 = "${var.name}-${each.key}-vnet-link"
+  name                 = "${local.dns_link_name_prefix}-${each.key}-vnet-link"
   private_dns_zone_id  = azurerm_private_dns_zone.this.id
   virtual_network_id   = each.value
   registration_enabled = false

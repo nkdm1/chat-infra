@@ -3,6 +3,12 @@ variable "name" {
   type        = string
 }
 
+variable "dns_link_name_prefix" {
+  description = "Optional stable prefix for private DNS VNet links, independent of server name."
+  type        = string
+  default     = null
+}
+
 variable "resource_group_name" {
   description = "Resource group containing the server."
   type        = string
@@ -82,5 +88,6 @@ variable "tags" {
 }
 
 locals {
-  tags = merge(var.tags, { env = var.env })
+  tags                 = merge(var.tags, { env = var.env })
+  dns_link_name_prefix = coalesce(var.dns_link_name_prefix, var.name)
 }

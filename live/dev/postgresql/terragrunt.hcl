@@ -27,7 +27,8 @@ dependency "postgresql_network" {
 # The operator supplies TF_VAR_administrator_password securely; it is ephemeral
 # and must not be passed through Terragrunt inputs or written to state.
 inputs = {
-  name                           = "chat-${local.env}-${local.subscription_suffix}-pg"
+  name                           = "chat-${local.env}-${local.subscription_suffix}-se-pg"
+  dns_link_name_prefix           = "chat-${local.env}-${local.subscription_suffix}-pg"
   resource_group_name            = dependency.resource_group.outputs.name
   location                       = "swedencentral"
   delegated_subnet_id            = dependency.postgresql_network.outputs.postgresql_subnet_id
