@@ -39,9 +39,9 @@ inputs = {
   node_min_count = 1
   node_max_count = 2
 
-  pod_cidr       = "10.2.0.0/22"
-  service_cidr   = "10.2.4.0/24"
-  dns_service_ip = "10.2.4.10"
+  pod_cidr       = "10.3.0.0/22"
+  service_cidr   = "10.3.4.0/24"
+  dns_service_ip = "10.3.4.10"
 
   env = local.env
   tags = {
