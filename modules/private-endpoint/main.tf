@@ -12,6 +12,16 @@ resource "azurerm_private_dns_zone_virtual_network_link" "this" {
   tags                 = local.tags
 }
 
+resource "azurerm_private_dns_zone_virtual_network_link" "additional" {
+  for_each = var.additional_virtual_network_ids
+
+  name                 = "${var.name}-${each.key}-vnet-link"
+  private_dns_zone_id  = azurerm_private_dns_zone.this.id
+  virtual_network_id   = each.value
+  registration_enabled = false
+  tags                 = local.tags
+}
+
 resource "azurerm_private_endpoint" "this" {
   name                = var.name
   location            = var.location

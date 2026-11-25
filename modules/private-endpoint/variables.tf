@@ -23,6 +23,12 @@ variable "virtual_network_id" {
   type        = string
 }
 
+variable "additional_virtual_network_ids" {
+  description = "Additional VNets linked to the private DNS zone, keyed by link suffix."
+  type        = map(string)
+  default     = {}
+}
+
 variable "target_resource_id" {
   description = "Resource ID of the private-link service."
   type        = string
