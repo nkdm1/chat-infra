@@ -30,7 +30,7 @@ GRANT CONNECT, CREATE ON DATABASE chat TO chat_app;
 GRANT USAGE, CREATE ON SCHEMA public TO chat_app;
 ```
 
-The user connected again as `chat_app` over TLS and verified that it could log in and had `CREATE` on the database and public schema. No migrations or application smoke tests had been run at that point. These grants are **not managed by Terraform** and will be lost when the server is destroyed unless recreated.
+The user connected again as `chat_app` over TLS and verified that it could log in and had `CREATE` on the database and public schema. With explicit approval, the `chat-db-migrate-5546c94` AKS Job completed on 2026-11-25 and reported migrations applied, using the immutable migrator image built from commit `5546c94fe25caebb22b6d1033c6b024bcfcf7291`. One migration removes duplicate reactions before changing a primary key. The app itself and Redis integration have not yet been smoke-tested. These grants are **not managed by Terraform** and will be lost when the server is destroyed unless recreated.
 
 The user deliberately chose one non-admin login for the app and migrations because the current chart uses one `DATABASE_URL`. Drizzle creates its migration schema and tables, so the login needs schema-creation privileges. This means a compromised app can perform DDL within its granted scope; it is not a read/write-only account. Other default `PUBLIC` grants may also exist: the two explicit grants above are not proof that access is otherwise limited. Review a separate migration login and tighter runtime privileges for prod rather than silently assuming the dev trade-off is acceptable.
 
