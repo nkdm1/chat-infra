@@ -73,3 +73,28 @@ Helm releases (`chat`, `nginx-gateway-fabric`) and the `chat-tls` Secret go with
 ## 5. Approval
 
 Approved decisions are recorded above. Next: you store the secrets in `chat-ops-cf816eae-kv` (step 1.2), then I run destroy plans step by step and stop for your go-ahead before each destroy.
+
+## 6. Execution record (2026-11-25, 19:40–20:34 UTC)
+
+| Step | Result |
+|---|---|
+| 1.4 temporary access | `operator-aks-access` destroyed (2). `operator-secret-access` and `operator-redis-access` already had no resources |
+| 2.1 Cloudflare `chat` record | Deleted manually by the user before 2.2 |
+| 2.2 operator VM, Bastion, NSG, NIC, subnet | Destroyed (6) |
+| 2.3 AKS `chat-dev-aks` | Destroyed (6); Helm releases, Gateway and `chat-tls` went with it |
+| 2.4 Redis + endpoint | Destroyed (4) |
+| 2.5 Cosmos endpoint + dev DB | Destroyed (6); account `chat-cosmos-cf816eae` kept |
+| 2.6 Blob endpoint + storage | Destroyed (6) |
+| 2.7 app Key Vault + endpoint | Destroyed (6); vault soft-deleted for 7 days |
+| 2.8 Web PubSub | Skipped (kept, D6) |
+| 2.9 PostgreSQL server + DB + DNS | Destroyed (6) |
+| 2.10 Swedish network + peerings | Destroyed (4) |
+| 2.11 federation + app identity | Identity destroyed (1); its federated credential is removed by Azure. **Federation state entry not removed**: Terragrunt cannot read that stack without the deleted AKS outputs. Harmless, no cost; clean later with a manual backend edit if desired |
+| 2.12 Belgium VNet, subnets, public IPs | Destroyed (6) |
+| 2.13 private DNS zones | Removed with their stacks (none remain) |
+| 2.14 `chat-dev-rg` | Kept: holds Web PubSub and email/ACS |
+| 2.15–2.16 | Kept (D2, D3, D5) |
+
+Remaining: `chat-dev-cf816eae-wps` (Web PubSub Free), `chat-dev-acs` + `chat-dev-email`, `websecchatacr` (Basic), `chat-github-publisher`, `chat-cosmos-cf816eae` (free tier, no data), `chat-ops-cf816eae-kv` (operator secrets, public access restricted to 185.72.186.2). The Terraform state backend was not touched.
+
+Verification done: no VMs, Bastion, AKS, private endpoints, or public IPs remain in any subscription resource group. Billing must be rechecked over the next 48–72 hours to confirm the Virtual Network, Redis, VM, and IP lines drop to zero.
