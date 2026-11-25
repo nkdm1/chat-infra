@@ -5,20 +5,20 @@ Terraform state backend (`polandcentral`, storage `chatopentofu`) is **not touch
 Each step is a reviewed `terragrunt plan -destroy` followed by `terragrunt destroy`, in the order below.
 Stop at the first unexpected resource, error, or dependency.
 
-## 0. Decisions needed before executing
+## 0. Decisions (approved 2026-11-25)
 
 | # | Item | Options | Recommendation |
 |---|---|---|---|
-| D1 | Operator secret vault | Separate vault in `chat-shared-rg`, public access on, network ACL default Deny + your IP, RBAC for you only | Yes. Costs ~0. Not in the app identity's reach. Avoids keeping a private endpoint |
-| D2 | Container Registry `websecchatacr` (Basic, ~€0.85/month) | Keep (images survive, rebuild skipped) / destroy (rebuild via CI) | Keep, unless the budget is critical |
-| D3 | Cosmos account `chat-cosmos-cf816eae` (free tier) | Keep (no idle cost) / destroy | Keep account; destroy dev DB and its private endpoint |
-| D4 | Dev data (Postgres `chat`, Redis, Blob `attachments`, Cosmos `chat-dev`) | Destroy and regenerate | Accept loss; no production data exists |
-| D5 | Azure Communication Services / Email | Keep (no idle cost) / destroy | Keep |
-| D6 | Web PubSub Free | Destroy | Destroy (recreate is free) |
+| D1 | Operator secret vault | **APPROVED, created:** `chat-ops-cf816eae-kv` in `chat-shared-rg`, RBAC, public access on with default Deny, allowed IP `185.72.186.2/32`, Secrets Officer for your user only | Created; no private endpoint |
+| D2 | Container Registry `websecchatacr` (Basic, ~€0.85/month) | **KEEP** |
+| D3 | Cosmos account `chat-cosmos-cf816eae` (free tier) | **KEEP account, remove data** (dev DB `chat-dev`, container, private endpoint) |
+| D4 | Dev data (Postgres `chat`, Redis, Blob `attachments`, Cosmos `chat-dev`) | **WIPE** (accepted) |
+| D5 | Azure Communication Services / Email | **KEEP** (in `chat-dev-rg`) |
+| D6 | Web PubSub Free (`chat-dev-cf816eae-wps`, Sweden Central) | **KEEP.** Free tier: 1 unit, 20 concurrent connections, 20k messages/day; no idle charge (verify in billing) |
 
 ## 1. Preparation (before any destroy)
 
-1. Create the operator vault (D1) in `chat-shared-rg` with network default Deny, add your current public IP, and grant your user `Key Vault Secrets Officer` on it only.
+1. **Done:** operator vault created (D1).
 2. Store, by hand, in the operator vault:
    - `postgresql-admin-password` (chatadmin)
    - `cloudflare-origin-key` (private key) and `cloudflare-origin-cert` (PEM)
@@ -38,18 +38,18 @@ Stop at the first unexpected resource, error, or dependency.
 | 2.2 | `live/dev/operator-access` | Operator VM, Bastion, NSG, subnet, NIC. Deleting the VM also deletes its OS disk (default). Operator-only |
 | 2.3 | `live/dev/aks` | Deletes the cluster, node pool, and its managed load balancer and resource group. Also invalidates the earlier admin kubeconfig |
 | 2.4 | `live/dev/redis-private-endpoint`, then `live/dev/redis` | Redis cache (~€0.22 per 3 days, largest data-service cost) |
-| 2.5 | `live/dev/cosmos-private-endpoint`, then `live/dev/cosmos-db` (DB and container only) | Keep account per D3 |
+| 2.5 | `live/dev/cosmos-private-endpoint`, then `live/dev/cosmos-db` (DB and container only) | Keep account per D3; removes data and the endpoint |
 | 2.6 | `live/dev/blob-private-endpoint`, then `live/dev/blob-storage` | Destroys `attachments` data (D4) |
 | 2.7 | `live/dev/key-vault-private-endpoint`, then `live/dev/key-vault` | App vault: soft-deleted for 7 days, purge protection off. Operator copies live in the D1 vault |
-| 2.8 | `live/dev/pubsub` | Web PubSub Free (D6) |
+| 2.8 | — | Web PubSub kept (D6). Do not destroy `live/dev/pubsub` |
 | 2.9 | `live/dev/postgresql` | Server and database (D4). Requires the admin password input |
 | 2.10 | `live/dev/postgresql-network` | Sweden VNet and peering. Destroy only after 2.9 |
 | 2.11 | `live/dev/workload-federation`, `live/dev/workload-identity` | Federated credential and app identity |
 | 2.12 | `live/dev/network` | VNet, subnets, static egress and gateway public IPs (€0.12 per 3 days) |
 | 2.13 | Private DNS zones left in `chat-dev-rg` (Redis, Blob, Vault, Cosmos, Postgres) | Removed with their stacks; confirm none remain |
-| 2.14 | `live/dev/resource-group` | `chat-dev-rg`, only once it is empty |
-| 2.15 | `live/dev/email-communication-service` | Only if D5 = destroy |
-| 2.16 | `live/shared/container-registry`, `live/shared/cosmos-db-account` | Only if D2/D3 = destroy |
+| 2.14 | — | `chat-dev-rg` is **kept** (holds Web PubSub, ACS/Email). Empty of billable items after steps above |
+| 2.15 | — | Email/ACS kept (D5) |
+| 2.16 | — | ACR and Cosmos account kept (D2, D3) |
 
 Helm releases (`chat`, `nginx-gateway-fabric`) and the `chat-tls` Secret go with the cluster in 2.3; no separate step is needed.
 
@@ -65,11 +65,11 @@ Helm releases (`chat`, `nginx-gateway-fabric`) and the `chat-tls` Secret go with
 
 ## 4. Risks accepted
 
-- Dev database contents and Blob attachments are lost (D4).
-- Re-creating the environment later needs: GitHub publish image (still in ACR if D2 = keep), `docs/runbook-dev-bringup.md`, and the operator vault secrets.
+- Dev database contents, Redis data and Blob attachments are lost (D4).
+- Re-creating the environment later needs: container images (kept in ACR, D2), `docs/runbook-dev-bringup.md`, and the operator vault secrets.
 - Cluster-admin credentials issued earlier become invalid when the AKS cluster is deleted.
 - Cross-region PostgreSQL peering costs stop only after step 2.10.
 
 ## 5. Approval
 
-Reply with decisions D1–D6 and approval for steps 1–2. I'll run each stack's destroy plan first, show it to you, and continue only after your go-ahead.
+Approved decisions are recorded above. Next: you store the secrets in `chat-ops-cf816eae-kv` (step 1.2), then I run destroy plans step by step and stop for your go-ahead before each destroy.
