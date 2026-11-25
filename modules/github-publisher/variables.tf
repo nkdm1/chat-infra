@@ -21,6 +21,31 @@ variable "registry_id" {
 variable "github_repository" {
   description = "GitHub owner/repository trusted to publish images."
   type        = string
+
+  validation {
+    condition     = can(regex("^[^/]+/[^/]+$", var.github_repository))
+    error_message = "github_repository must have the form owner/repository."
+  }
+}
+
+variable "github_owner_id" {
+  description = "Immutable numeric GitHub owner ID included in the OIDC subject."
+  type        = string
+
+  validation {
+    condition     = can(regex("^[0-9]+$", var.github_owner_id))
+    error_message = "github_owner_id must be a numeric GitHub ID."
+  }
+}
+
+variable "github_repository_id" {
+  description = "Immutable numeric GitHub repository ID included in the OIDC subject."
+  type        = string
+
+  validation {
+    condition     = can(regex("^[0-9]+$", var.github_repository_id))
+    error_message = "github_repository_id must be a numeric GitHub ID."
+  }
 }
 
 variable "github_branch" {

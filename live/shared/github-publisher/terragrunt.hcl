@@ -15,11 +15,13 @@ dependency "container_registry" {
 }
 
 inputs = {
-  name                = "chat-github-publisher"
-  resource_group_name = dependency.resource_group.outputs.name
-  location            = "belgiumcentral"
-  registry_id         = dependency.container_registry.outputs.id
-  github_repository   = "nkdm1/chat"
-  github_branch       = "main"
-  env                 = "shared"
+  name                 = "chat-github-publisher"
+  resource_group_name  = dependency.resource_group.outputs.name
+  location             = "belgiumcentral"
+  registry_id          = dependency.container_registry.outputs.id
+  github_repository    = "nkdm1/chat"
+  github_owner_id      = "148000728"
+  github_repository_id = "1409133021"
+  github_branch        = "main"
+  env                  = "shared"
 }
