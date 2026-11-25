@@ -1,0 +1,65 @@
+# PostgreSQL provisioning: dev record and automation requirements
+
+This is a record of the dev setup and a specification for future automation, **not an implemented or tested prod runbook**. There is no `live/prod/` stack yet. Review region, sizing, security, backups, cost, access and data-loss implications before provisioning or changing any environment. Never reuse dev credentials for prod.
+
+## Provisioned infrastructure
+
+The user reviewed and applied the dev Terragrunt stacks individually. The relevant configuration is:
+
+- `live/dev/network`: the Belgium Central app VNet (`10.1.0.0/16`). Its original PostgreSQL delegated subnet is not used by the current Swedish server.
+- `live/dev/postgresql-network`: the Sweden Central VNet (`10.2.0.0/16`), PostgreSQL delegated subnet (`10.2.1.0/24`) and two-way peering with the Belgium VNet. Cross-region traffic can incur charges. The separate temporary operator subnet was added later by `operator-access`.
+- `live/dev/postgresql`: server `chat-dev-cf816eae-se-pg` in Sweden Central; PostgreSQL 17, SKU `B_Standard_B1ms`, 32 GiB storage, seven-day backups, no geo-redundant backups, no configured HA, delegated private networking, public network access disabled, and `require_secure_transport = on`. It also creates database `chat` and the private DNS zone/links to both VNets. The Belgium-created zone and its original link were retained when Sweden was added; the stable DNS link prefix prevents a server rename from replacing them.
+- The server administrator is `chatadmin`. The user's administrator password was supplied at apply time via the sensitive, ephemeral OpenTofu input `TF_VAR_administrator_password` and AzureRM's write-only `administrator_password_wo`; it is not intentionally stored in the Terraform plan or state. Protect the execution environment and the password manager nonetheless. Increment `administrator_password_version` when deliberately rotating the write-only password and review the plan. Supply the approved SKU with `POSTGRESQL_SKU`; the SKU is not automatically selected.
+
+Azure failed to allocate `B_Standard_B1ms` and `B_Standard_B2s` in Belgium Central. A Sweden attempt using the original name returned `InvalidResourceLocation`, despite subsequent Azure list/GET checks not finding that server. A distinct `-se-pg` name then succeeded in Sweden. SKU listings, name checks and a successful plan do **not** guarantee allocation. These dev choices are not automatically appropriate or available in prod.
+
+Azure reported the dev server `Ready`. The operator VM resolved the server through the private DNS path to `10.2.1.4` and reached port 5432. The operator connected to `chat` as `chatadmin` with `PGSSLMODE=verify-full`, `PGSSLROOTCERT=/etc/ssl/certs/ca-certificates.crt`, and `psql -W`; `\conninfo` showed the private address and TLS 1.3. The Ubuntu `psql` 14 client displayed a major-version warning against server 17; the commands below succeeded, but match client/server major versions for future automation where possible. Private networking, peering, DNS and TLS must be checked again for each environment.
+
+## Out-of-band SQL performed for dev
+
+Terraform created the database but **did not create the application login or its grants**. In the private `psql` session, the user ran:
+
+```sql
+CREATE ROLE chat_app LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION;
+```
+
+The user then ran `\password chat_app` and entered the new application password at the hidden prompts. The password is separate from the administrator password and must not be placed in SQL source, command-line arguments, shell history, logs, Git, Terraform state, or chat. The role was granted:
+
+```sql
+GRANT CONNECT, CREATE ON DATABASE chat TO chat_app;
+GRANT USAGE, CREATE ON SCHEMA public TO chat_app;
+```
+
+The user connected again as `chat_app` over TLS and verified that it could log in and had `CREATE` on the database and public schema. No migrations or application smoke tests had been run at that point. These grants are **not managed by Terraform** and will be lost when the server is destroyed unless recreated.
+
+The user deliberately chose one non-admin login for the app and migrations because the current chart uses one `DATABASE_URL`. Drizzle creates its migration schema and tables, so the login needs schema-creation privileges. This means a compromised app can perform DDL within its granted scope; it is not a read/write-only account. Other default `PUBLIC` grants may also exist: the two explicit grants above are not proof that access is otherwise limited. Review a separate migration login and tighter runtime privileges for prod rather than silently assuming the dev trade-off is acceptable.
+
+## Secret provisioning and current status
+
+The application connection string must eventually be stored as `database-url` in the environment's private Key Vault, with URL components correctly percent-encoded. Verify the application's actual TLS/certificate behavior separately; the `psql` verification above does not prove the app driver verifies the server certificate. The connection string had **not** yet been provisioned or tested at the time this note was written.
+
+The dev app identity has vault-wide `Key Vault Secrets User` access. **Do not store the PostgreSQL administrator password in that app-readable vault.** Keep it in an appropriately restricted password manager or a separately secured secret store. The temporary operator VM initially has no Key Vault secret-write role; grant only a reviewed temporary role if needed and remove it afterward. At the time of writing, a Swedish Key Vault DNS VNet-link change was planned but not applied. See `deploy/dev-operations.md` for the private operator path and `docs/operator-vm-incident.md` for the VM's manually repaired login.
+
+## Requirements for a future Ansible or equivalent implementation
+
+1. Apply and verify the infrastructure and private operator path first. Resolve the environment-specific FQDN to its expected private address, connect with certificate and hostname verification, and fail closed if networking or TLS checks fail. Handle operator temporary roles and resources with an explicitly reviewed teardown.
+2. Use separate dev/prod inputs and credentials. Retrieve the administrator credential from an operator-restricted secret manager, not the app vault. Generate a strong app password only when creating the account or during an explicitly requested rotation, and store it in the environment's approved app vault. Don't generate a new password on every run.
+3. Make account creation **idempotent**: query `pg_roles` by the configured role name; create the login only if absent. PostgreSQL's `CREATE ROLE` above has no `IF NOT EXISTS`. If the role already exists, verify its attributes and grants; do not silently take ownership of an unrelated role, overwrite its password, or remove other grants. Fail and ask for review on unexpected state.
+4. Apply only the approved grants and verify them. If retaining the shared migration/runtime login, account for the database `CREATE` and public-schema `USAGE`/`CREATE` grants and explicitly accept the DDL exposure. If using separate identities, define and test the migration and runtime permissions independently; update the chart and secret mapping accordingly.
+5. Keep secrets out of playbooks, inventory, Git, Terraform state, process arguments, shell history, CI output, and command logs. For Ansible, `no_log: true` is necessary for secret-bearing tasks but **not sufficient**: review transport, remote temporary files, process inspection, fact caching, error handling and cleanup. Use a secret-safe password-setting mechanism; do not build SQL by interpolating passwords into shell commands. Properly quote SQL identifiers and URL-encode connection-string components.
+6. Verify a fresh app-login TLS connection, the effective role attributes and privileges, and Key Vault retrieval from the intended identity. Run migrations only after those checks and explicit approval. Test the application end to end, then revoke temporary operator permissions and review teardown. Record results without logging secrets.
+
+Useful non-secret verification in a privileged `psql` session:
+
+```sql
+SELECT rolname, rolcanlogin, rolsuper, rolcreatedb, rolcreaterole,
+       rolreplication, rolbypassrls
+FROM pg_roles WHERE rolname = 'chat_app';
+
+SELECT has_database_privilege('chat_app', 'chat', 'CONNECT') AS can_connect,
+       has_database_privilege('chat_app', 'chat', 'CREATE') AS can_create_schema,
+       has_schema_privilege('chat_app', 'public', 'USAGE') AS can_use_public,
+       has_schema_privilege('chat_app', 'public', 'CREATE') AS can_create_tables;
+```
+
+These checks do not reveal passwords and do not prove that no other inherited or `PUBLIC` privileges exist.
