@@ -151,6 +151,11 @@ def main() -> int:
                 sql.SQL("GRANT CONNECT, CREATE ON DATABASE {} TO {}")
                 .format(sql.Identifier(DATABASE_NAME), sql.Identifier(APP_ROLE))
             )
+
+    # Schema privileges are database-local; grant on public while connected to chat,
+    # not the maintenance database used above.
+    with connect(postgres_host, DATABASE_NAME, ADMIN_ROLE, admin_password) as conn:
+        with conn.cursor() as cursor:
             cursor.execute(
                 sql.SQL("GRANT USAGE, CREATE ON SCHEMA public TO {}")
                 .format(sql.Identifier(APP_ROLE))

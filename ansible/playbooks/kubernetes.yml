@@ -138,17 +138,30 @@
       register: migration_release
       changed_when: true
 
-    - name: Wait for database migration Job to complete
+    - name: Poll migration Job until it completes or fails
       ansible.builtin.command:
         argv:
           - kubectl
-          - wait
-          - --for=condition=complete
-          - "job/{{ migration_job_name }}"
+          - get
+          - job
+          - "{{ migration_job_name }}"
           - --namespace
           - chat
-          - --timeout=600s
+          - --output=json
+      register: migration_job_status
       changed_when: false
+      retries: 120
+      delay: 5
+      until: >-
+        (migration_job_status.stdout | from_json).status.succeeded | default(0) | int > 0
+        or
+        (migration_job_status.stdout | from_json).status.failed | default(0) | int > 0
+
+    - name: Require database migration Job success
+      ansible.builtin.assert:
+        that:
+          - (migration_job_status.stdout | from_json).status.succeeded | default(0) | int > 0
+        fail_msg: "Database migration Job failed; inspect its pod status and logs before retrying"
 
     - name: Upgrade Helm release to run the application
       ansible.builtin.command:
