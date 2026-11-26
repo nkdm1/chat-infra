@@ -12,6 +12,12 @@ resource "azurerm_subnet" "postgresql" {
   virtual_network_name = azurerm_virtual_network.this.name
   address_prefixes     = var.subnet_address_prefixes
 
+  # The VNet can be replaced while retaining the same Azure resource ID/name.
+  # Recreate the subnet whenever its parent VNet is replaced.
+  lifecycle {
+    replace_triggered_by = [azurerm_virtual_network.this]
+  }
+
   service_endpoint {
     service = "Microsoft.Storage"
   }
@@ -32,6 +38,10 @@ resource "azurerm_virtual_network_peering" "to_app" {
   resource_group_name       = var.resource_group_name
   virtual_network_name      = azurerm_virtual_network.this.name
   remote_virtual_network_id = var.app_virtual_network_id
+
+  lifecycle {
+    replace_triggered_by = [azurerm_virtual_network.this]
+  }
 }
 
 resource "azurerm_virtual_network_peering" "from_app" {
@@ -42,4 +52,8 @@ resource "azurerm_virtual_network_peering" "from_app" {
 
   # Azure does not support concurrent peering updates for the same VNet pair.
   depends_on = [azurerm_virtual_network_peering.to_app]
+
+  lifecycle {
+    replace_triggered_by = [azurerm_virtual_network.this]
+  }
 }

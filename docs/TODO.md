@@ -4,7 +4,7 @@
 >
 > **Operating target:** roughly two months of intermittent use, not 24/7 hosting. Most resources can be destroyed between uses; dev and prod data can be regenerated for demonstrations if retention costs too much. After preflight and explicit approval, measure a bounded 24-hour trial. Total project spend must stay below the hard **$100 USD credit ceiling**.
 >
-> **Current region-move update:** checked-in configuration now targets Denmark East for the PostgreSQL network/server and operator VM/Bastion; no apply has been run. Read-only inventory found the Sweden PostgreSQL VNet and DNS resources still present, no PostgreSQL server, and no operator VM/Bastion. Review the Denmark plans and current quota/cost/capacity before applying. Older Sweden notes below are historical unless explicitly stated otherwise.
+> **Current region-move update:** checked-in configuration targets Denmark East for PostgreSQL and the operator VM/Bastion. The first user-run apply recreated the PostgreSQL VNet but left it without its delegated subnet; the PostgreSQL-side peering is absent and the Belgium-side peering is only `Initiated`. The Denmark and Belgium private-DNS links are complete, but no PostgreSQL server or operator VM/Bastion exists. Reconcile the Terraform network state/resources before retrying; older Sweden notes below are historical unless explicitly stated otherwise.
 
 ## Current state
 

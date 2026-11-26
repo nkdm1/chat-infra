@@ -1,6 +1,6 @@
 # Runtime secret provisioning: dev record and automation requirements
 
-This records the dev setup and requirements for future automation, **not an implemented or tested production runbook**. Secrets were provisioned outside Terraform. Never put secret values, credentials, bearer tokens, private keys or connection strings in Git, CI logs, terminal recordings, Terraform variables/state, shell history or support tickets. The assistant checked secret **names** only, not values.
+This records the dev setup and requirements for future automation, **not an implemented or tested production runbook**. The networking and access validations below describe the historical Sweden deployment and must not be treated as validation of Denmark. The current move is partial: the Denmark VNet exists, but its PostgreSQL subnet/peering and database server have not been restored; no operator VM exists. Secrets were provisioned outside Terraform. Never put secret values, credentials, bearer tokens, private keys or connection strings in Git, CI logs, terminal recordings, Terraform variables/state, shell history or support tickets. The assistant checked secret **names** only, not values.
 
 ## Dev resources and operator path
 
