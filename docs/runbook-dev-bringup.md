@@ -2,7 +2,7 @@
 
 **Status (2026-11-25): the dev app environment has been destroyed.** The shared ACR, shared Cosmos account (empty), Web PubSub Free, ACS/Email, operator secrets vault and Terraform state backend remain. See [`teardown-plan.md`](teardown-plan.md) for the executed teardown and kept-resource inventory. The steps below describe how to reconstruct the demo, but this is not yet a one-command or fully clean-room procedure: the secret-writing and TLS-secret bootstrap paths still need reviewed, checked-in automation or an explicitly documented secure manual method.
 
-This document separates **what Terraform/Helm already automate** from **operator actions still performed manually**. A runbook is not an automation script: there is currently no checked-in Python provisioning script and no Ansible playbook. Commands below are shown individually, in execution order. Do not paste secret values into terminals, command arguments, Git, Terraform state inputs, logs, or chat.
+This document separates **what Terraform/Helm already automate** from **operator actions still performed manually**. There is one recovered and parameterized Python helper for Redis/Better Auth secrets in `scripts/`, but no Ansible playbook and no checked-in implementation for the historical database-URL or TLS-secret procedures. Commands below are shown individually, in execution order. Do not paste secret values into terminals, command arguments, Git, Terraform state inputs, logs, or chat.
 
 ## 1. What is automated, and what is manual
 
@@ -18,7 +18,7 @@ This document separates **what Terraform/Helm already automate** from **operator
 - Azure subscription login, region/policy/cost review, and individual Terraform plan/apply approval.
 - GitHub repository configuration and the image-publishing workflow run/verification.
 - Provisioning the PostgreSQL application login and grants using `psql` (details in [`postgresql-provisioning.md`](postgresql-provisioning.md)).
-- Writing runtime secrets into Key Vault (historically done with interactive Python snippets that are **not saved in this repository**; see [`runtime-secret-provisioning.md`](runtime-secret-provisioning.md)). Do not recreate those snippets by guessing. The Ansible implementation is still future work.
+- Writing runtime secrets into Key Vault. The Redis/Better Auth helper was recovered from an ignored Terragrunt cache and adapted in `scripts/`; the original database-URL snippet was not recovered. See [`runtime-secret-provisioning.md`](runtime-secret-provisioning.md) and [`../scripts/README.md`](../scripts/README.md). Ansible implementation remains future work.
 - Creating the Cloudflare Origin CA certificate, securely transferring it and creating Kubernetes `chat-tls`. The old `install-chat-tls.py` mentioned in earlier notes is **not checked in**. Do not expect that script to exist.
 - Installing Gateway API CRDs and NGINX Gateway Fabric, Helm migration/app releases, DNS and Cloudflare SSL configuration. These were operator-run, not automated in CI.
 - Temporary operator VM guest repair in the previous run. See [`operator-vm-incident.md`](operator-vm-incident.md); change the VM admin username before recreating it.
@@ -131,9 +131,9 @@ GRANT USAGE, CREATE ON SCHEMA public TO chat_app;
 
 Verify the role and grants without displaying credentials. The same login is used by app and migrations and has DDL permissions; this is a dev-only compromise. Full rationale, verification queries, allocation incident, and production security requirements are in [`postgresql-provisioning.md`](postgresql-provisioning.md).
 
-## 6. Runtime secrets (manual; no checked-in Python script)
+## 6. Runtime secrets (partly scripted; DB URL and TLS remain manual/unimplemented)
 
-The prior operator VM used short interactive Python snippets to write Key Vault secrets. Those source files were temporary/not committed and **cannot be reproduced by running a repository script**. The three app secrets are:
+The prior operator VM used interactive Python for Key Vault secret creation. The Redis/Better Auth script was later recovered from an ignored Terragrunt cache and adapted in `../scripts/provision_runtime_secrets.py`; it does not create `database-url`. The original database-URL and TLS-secret snippets were not recovered. See `../scripts/README.md` for provenance and current prerequisites. The three app secrets are:
 
 - `database-url`: `chat_app` URL for the PostgreSQL database, with encoded userinfo and `sslmode=verify-full`.
 - `redis-url`: TLS URL for the Redis `default` user/port 10000 and a Redis key.
@@ -141,7 +141,7 @@ The prior operator VM used short interactive Python snippets to write Key Vault 
 
 Before writing secrets, verify the operator VM's private DNS and network route to Key Vault, confirm the VM identity has a reviewed, temporary write role, and confirm the app identity has only the access it needs. Use the Azure Portal/CLI secret input facility or an approved secret-management tool that masks values and does not put them into arguments/history. Do **not** improvise Python that prints access tokens, response bodies, URLs, or values. Record only secret names in verification. Remove temporary role assignments and verify their removal afterward.
 
-Do not copy the PostgreSQL administrator password into the app vault: the app identity can read runtime secrets. The kept operator-only vault is `chat-ops-cf816eae-kv`; its network IP allowlist must be updated when the operator's IP changes. Detailed historic behavior and future automation requirements are in [`runtime-secret-provisioning.md`](runtime-secret-provisioning.md).
+Do not copy the PostgreSQL administrator password into the app vault: the app identity can read runtime secrets. The kept operator-only vault is `chat-ops-cf816eae-kv`. Its firewall currently permits the workstation IP, not a recreated VM; see `../scripts/README.md` for the required private endpoint/DNS and managed-identity permission before VM-side retrieval. Detailed historic behavior and future automation requirements are in [`runtime-secret-provisioning.md`](runtime-secret-provisioning.md).
 
 ## 7. Operator VM access and incident caveat
 
