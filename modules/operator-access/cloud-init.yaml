@@ -22,15 +22,25 @@ runcmd:
     tmpdir=$(mktemp -d)
     trap 'rm -rf "$tmpdir"' 0
 
+    # Refresh the system trust store before fetching third-party repository keys.
+    DEBIAN_FRONTEND=noninteractive apt-get update
+    DEBIAN_FRONTEND=noninteractive apt-get install -y ca-certificates curl gnupg
+    update-ca-certificates --fresh
+    test -s /etc/ssl/certs/ca-certificates.crt
+
     install -d -m 0755 /etc/apt/keyrings
-    curl -fsSL -o "$tmpdir/microsoft.asc" https://packages.microsoft.com/keys/microsoft.asc
+    curl --fail --show-error --location --retry 5 --retry-all-errors --retry-delay 2 \
+      --connect-timeout 20 --max-time 120 \
+      --output "$tmpdir/microsoft.asc" https://packages.microsoft.com/keys/microsoft.asc
     gpg --dearmor --yes -o /etc/apt/keyrings/microsoft.gpg "$tmpdir/microsoft.asc"
     chmod 0644 /etc/apt/keyrings/microsoft.gpg
     . /etc/os-release
     echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/microsoft.gpg] https://packages.microsoft.com/repos/azure-cli/ ${VERSION_CODENAME} main" \
       > /etc/apt/sources.list.d/azure-cli.list
 
-    curl -fsSL -o "$tmpdir/helm-signing.asc" https://baltocdn.com/helm/signing.asc
+    curl --fail --show-error --location --retry 5 --retry-all-errors --retry-delay 2 \
+      --connect-timeout 20 --max-time 120 \
+      --output "$tmpdir/helm-signing.asc" https://baltocdn.com/helm/signing.asc
     gpg --dearmor --yes -o /usr/share/keyrings/helm.gpg "$tmpdir/helm-signing.asc"
     chmod 0644 /usr/share/keyrings/helm.gpg
     echo "deb [arch=amd64 signed-by=/usr/share/keyrings/helm.gpg] https://baltocdn.com/helm/stable/debian/ all main" \
