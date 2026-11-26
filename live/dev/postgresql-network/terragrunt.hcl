@@ -20,7 +20,7 @@ dependency "network" {
 
 inputs = {
   resource_group_name      = dependency.resource_group.outputs.name
-  location                 = "swedencentral"
+  location                 = "denmarkeast"
   vnet_name                = "chat-${local.env}-postgresql-vnet"
   address_space            = ["10.2.0.0/16"]
   subnet_name              = "chat-${local.env}-postgresql-subnet"

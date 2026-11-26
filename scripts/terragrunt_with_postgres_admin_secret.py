@@ -306,7 +306,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--mode", choices=("ensure", "read"), required=True)
     parser.add_argument("--resource-group", default="chat-dev-rg")
-    parser.add_argument("--server-name", default="chat-dev-cf816eae-se-pg")
+    parser.add_argument("--server-name", default="chat-dev-cf816eae-dk-pg")
     parser.add_argument("command", nargs=argparse.REMAINDER, help="Terragrunt command after --")
     args = parser.parse_args()
     if args.command and args.command[0] == "--":

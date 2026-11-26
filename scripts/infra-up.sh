@@ -12,7 +12,7 @@ fi
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 EXPECTED_SUBSCRIPTION_ID="cf816eae-f4d9-4db4-bfa6-bda71e2cbf68"
 POSTGRES_RESOURCE_GROUP="chat-dev-rg"
-POSTGRES_SERVER_NAME="chat-dev-cf816eae-se-pg"
+POSTGRES_SERVER_NAME="chat-dev-cf816eae-dk-pg"
 PUBLIC_REPO="https://github.com/nkdm1/chat-infra.git"
 
 stacks=(
@@ -157,16 +157,16 @@ get_postgresql_sku_candidates() {
       Failed)
         # A failed prior create must advance past the SKU Azure reports on that resource.
         case "$existing_sku" in
-          B_Standard_B1ms) printf '%s\n' B_Standard_B2s B_Standard_B2ms ;;
-          B_Standard_B2s|B_Standard_B2ats_v2) printf '%s\n' B_Standard_B2ms ;;
-          B_Standard_B2ms) fail "All configured PostgreSQL SKUs were already attempted; inspect Azure state before retrying" ;;
+          B_Standard_B1ms) printf '%s\n' B_Standard_B2s ;;
+          B_Standard_B2s) fail "All configured Denmark East PostgreSQL SKUs were already attempted; inspect Azure state before retrying" ;;
+          B_Standard_B2ms|B_Standard_B2ats_v2) fail "Failed PostgreSQL server uses SKU $existing_sku, which is not configured for Denmark East; inspect Azure state before retrying" ;;
           *) fail "PostgreSQL is in Failed state with unrecognized SKU $existing_sku; inspect Azure before retrying" ;;
         esac
         ;;
       *) fail "PostgreSQL server is in state $server_state; wait or inspect it before planning" ;;
     esac
   elif grep -Eqi 'ResourceNotFound|was not found|could not be found' "$error_file"; then
-    printf '%s\n' B_Standard_B1ms B_Standard_B2s B_Standard_B2ms
+    printf '%s\n' B_Standard_B1ms B_Standard_B2s
   else
     cat "$error_file" >&2
     fail "Could not determine the PostgreSQL server SKU; stopped before planning it"

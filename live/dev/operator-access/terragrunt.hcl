@@ -21,7 +21,7 @@ dependency "postgresql_network" {
 inputs = {
   name                    = "chat-${local.env}-operator"
   resource_group_name     = dependency.resource_group.outputs.name
-  location                = "swedencentral"
+  location                = "denmarkeast"
   virtual_network_id      = dependency.postgresql_network.outputs.virtual_network_id
   virtual_network_name    = "chat-${local.env}-postgresql-vnet"
   subnet_name             = "chat-${local.env}-operator-subnet"

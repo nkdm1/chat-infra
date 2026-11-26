@@ -28,13 +28,13 @@ dependency "postgresql_network" {
 # through scripts/terragrunt_with_postgres_admin_secret.py. Never pass it through
 # Terragrunt inputs or write it to state.
 inputs = {
-  name                           = "chat-${local.env}-${local.subscription_suffix}-se-pg"
+  name                           = "chat-${local.env}-${local.subscription_suffix}-dk-pg"
   dns_link_name_prefix           = "chat-${local.env}-${local.subscription_suffix}-pg"
   resource_group_name            = dependency.resource_group.outputs.name
-  location                       = "swedencentral"
+  location                       = "denmarkeast"
   delegated_subnet_id            = dependency.postgresql_network.outputs.postgresql_subnet_id
   virtual_network_id             = dependency.network.outputs.virtual_network_id
-  additional_virtual_network_ids = { sweden = dependency.postgresql_network.outputs.virtual_network_id }
+  additional_virtual_network_ids = { denmark = dependency.postgresql_network.outputs.virtual_network_id }
   private_dns_zone_name          = "chat-${local.env}.postgres.database.azure.com"
   postgresql_version             = "17"
   sku_name                       = get_env("POSTGRESQL_SKU", "B_Standard_B1ms")

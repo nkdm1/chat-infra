@@ -61,7 +61,7 @@ class AdminSecretTests(unittest.TestCase):
             mock.patch.object(MODULE, "key_vault_request", side_effect=[MODULE.SecretNotFound("missing"), None]) as request,
             contextlib.redirect_stderr(io.StringIO()) as stderr,
         ):
-            value = MODULE.ensure_secret("chat-dev-rg", "chat-dev-cf816eae-se-pg")
+            value = MODULE.ensure_secret("chat-dev-rg", "chat-dev-cf816eae-dk-pg")
 
         self.assertEqual(request.call_args_list[0].args, ("GET", "token"))
         self.assertEqual(request.call_args_list[1].args, ("PUT", "token", value))
@@ -75,7 +75,7 @@ class AdminSecretTests(unittest.TestCase):
             mock.patch.object(MODULE, "key_vault_request", side_effect=MODULE.SecretNotFound("missing")) as request,
         ):
             with self.assertRaises(MODULE.SafeError):
-                MODULE.ensure_secret("chat-dev-rg", "chat-dev-cf816eae-se-pg")
+                MODULE.ensure_secret("chat-dev-rg", "chat-dev-cf816eae-dk-pg")
         request.assert_called_once_with("GET", "token")
 
     def test_missing_server_reuses_staged_secret_on_retry(self):
@@ -86,7 +86,7 @@ class AdminSecretTests(unittest.TestCase):
             mock.patch.object(MODULE, "key_vault_request", return_value="already-staged") as request,
             contextlib.redirect_stderr(io.StringIO()),
         ):
-            value = MODULE.ensure_secret("chat-dev-rg", "chat-dev-cf816eae-se-pg")
+            value = MODULE.ensure_secret("chat-dev-rg", "chat-dev-cf816eae-dk-pg")
 
         self.assertEqual(value, "already-staged")
         request.assert_called_once_with("GET", "token")
@@ -99,7 +99,7 @@ class AdminSecretTests(unittest.TestCase):
             mock.patch.object(MODULE, "key_vault_request", return_value="existing-value") as request,
             contextlib.redirect_stderr(io.StringIO()),
         ):
-            value = MODULE.ensure_secret("chat-dev-rg", "chat-dev-cf816eae-se-pg")
+            value = MODULE.ensure_secret("chat-dev-rg", "chat-dev-cf816eae-dk-pg")
 
         self.assertEqual(value, "existing-value")
         request.assert_called_once_with("GET", "token")

@@ -3,6 +3,8 @@
 > **Snapshot:** checked-in configuration originally reviewed at infra commit `7327eb7` (`2026-11-20`), with subsequent updates noted below. Application docs/code and Azure deployment state were inspected separately. This is a repository snapshot, **not** proof that Azure resources exist or have been applied. Verify the live subscription before describing anything as deployed.
 >
 > **Operating target:** roughly two months of intermittent use, not 24/7 hosting. Most resources can be destroyed between uses; dev and prod data can be regenerated for demonstrations if retention costs too much. After preflight and explicit approval, measure a bounded 24-hour trial. Total project spend must stay below the hard **$100 USD credit ceiling**.
+>
+> **Current region-move update:** checked-in configuration now targets Denmark East for the PostgreSQL network/server and operator VM/Bastion; no apply has been run. Read-only inventory found the Sweden PostgreSQL VNet and DNS resources still present, no PostgreSQL server, and no operator VM/Bastion. Review the Denmark plans and current quota/cost/capacity before applying. Older Sweden notes below are historical unless explicitly stated otherwise.
 
 ## Current state
 
