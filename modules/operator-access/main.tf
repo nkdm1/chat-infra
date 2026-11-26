@@ -65,6 +65,7 @@ resource "azurerm_linux_virtual_machine" "operator" {
   disable_password_authentication = true
   network_interface_ids           = [azurerm_network_interface.operator.id]
   tags                            = local.tags
+  custom_data                     = base64encode(file("${path.module}/cloud-init.yaml"))
 
   admin_ssh_key {
     username   = var.admin_username

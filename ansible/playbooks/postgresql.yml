@@ -1,0 +1,17 @@
+---
+- name: Provision PostgreSQL app role and connection secret
+  hosts: operator
+  gather_facts: false
+  tasks:
+    - name: Create or verify chat_app and database-url
+      ansible.builtin.command:
+        argv:
+          - python3
+          - /opt/chat-infra/scripts/provision_postgresql.py
+      environment:
+        OPERATOR_KEY_VAULT_NAME: "{{ lookup('env', 'OPERATOR_KEY_VAULT_NAME') }}"
+        APP_KEY_VAULT_NAME: "{{ lookup('env', 'APP_KEY_VAULT_NAME') }}"
+        POSTGRES_HOST: "{{ lookup('env', 'POSTGRES_HOST') }}"
+      register: postgresql_provisioning
+      changed_when: "'created' in postgresql_provisioning.stdout"
+      no_log: true

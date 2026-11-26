@@ -7,20 +7,22 @@
 - Runbook for rebuild: `docs/runbook-dev-bringup.md`. Non-secret chart values: `deploy/environments/dev/chat-values.yaml`.
 
 ## 1. Cost monitoring (ongoing)
-- Check Azure Cost Analysis (group by meter) daily for 48–72 h: Virtual Network, Redis Cache, Virtual Machines, Public IP, Container Registry, Storage.
-- Expected after teardown: all dev lines at zero except Container Registry (~€0.03/day) and Web PubSub/ACS (should be zero idle).
+- Latest Cost Analysis shows €3.10 actual cost; this is acceptable. Continue monitoring for the next 24 hours, then review again for delayed charges.
+- Check by meter: Virtual Network, Redis Cache, Virtual Machines, Public IP, Container Registry, Storage, Web PubSub and ACS.
+- Expected after teardown: all dev lines at zero except Container Registry (~€0.03/day); Web PubSub/ACS should be zero idle. These estimates are historical and Cost Management can lag.
 - Anything spiking or not dropping to zero: stop and investigate first, then shut it down.
 
-## 2. Ansible (configure via Bastion)
-- Write playbooks for: PostgreSQL (app login `chat_app`, grants), Redis access setup, Kubernetes admin tasks (CSI, Gateway API CRDs, NGINX Gateway Fabric, `chat-tls` secret, Helm releases).
-- Secret-bearing tasks must use `no_log`, take values from the operator vault, and never accept secrets as arguments.
-- Run from the Bastion-reachable operator VM (or a runner inside the VNet). The VM itself is destroyed; recreate it via `live/dev/operator-access` when needed (choose a non-conflicting username).
-- Document each playbook's inputs and expected outputs in the runbook.
+## 2. Ansible (operator VM executes locally; no interactive VM login)
+- [x] Added Ansible playbooks for PostgreSQL app-role/database URL, Redis runtime secrets, Gateway API CRDs, NGINX Gateway Fabric, TLS Secret, migration and app Helm releases.
+- [x] Added VM cloud-init bootstrap, switched the guest username to `chatoperator`, and selected workstation-triggered Azure VM Run Command. The VM checks out public GitHub `main`; no Bastion/SSH login is part of automation.
+- [x] Added Terragrunt code for operator-vault private connectivity/DNS and Key Vault Secrets User access for the VM identity. It is not applied and adds recurring private-endpoint cost.
+- [ ] Publish/merge the reviewed code to public `main`, then test the full VM bootstrap/Ansible flow during an approved dev rebuild. The workstation has no `ansible-playbook`, and no Azure call was made in this session.
 
-## 3. `infra up` / `infra down` script
-- Combine: Terragrunt stack order (`docs/runbook-dev-bringup.md` §1), Ansible playbooks (§2), Helm (§2.6–2.7), and teardown order (`docs/teardown-plan.md` §2).
-- Require explicit confirmation on destroy; refuse to destroy `chat-shared-rg` and the state backend.
-- Always print the plan and stop for approval; never auto-approve.
+## 3. `infra up` / `infra down` scripts
+- [x] Added workstation wrappers that use the active Azure CLI login for local Terragrunt and Azure VM Run Command; no Azure credentials are copied to the VM.
+- [x] `infra up` prints each plan and requires stack-specific approval before apply, then triggers VM-local Ansible. It requires reviewed code on public `main` and renders fresh non-secret Helm values from Terraform outputs.
+- [x] `infra down` follows the teardown order, preserves shared resources and state, pauses for manual Cloudflare DNS deletion, and requires stack-specific destroy approval. Workload federation is destroyed before AKS to avoid stale Terragrunt dependencies.
+- [ ] Review scripts carefully and validate with read-only plans first. No apply/destroy or Azure VM Run Command was executed in this session; wrapper behavior remains untested.
 
 ## 4. Monitoring (basic)
 - Container Insights / Azure Monitor for AKS: node CPU and memory, pod restarts, node load.

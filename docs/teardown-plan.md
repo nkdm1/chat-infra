@@ -9,7 +9,7 @@ Stop at the first unexpected resource, error, or dependency.
 
 | # | Item | Options | Recommendation |
 |---|---|---|---|
-| D1 | Operator secret vault | **APPROVED, created:** `chat-ops-cf816eae-kv` in `chat-shared-rg`, RBAC, public access on with default Deny, allowed IP `185.72.186.2/32`, Secrets Officer for your user only | Created; no private endpoint |
+| D1 | Operator secret vault | **APPROVED, created:** `chat-ops-cf816eae-kv` in `chat-shared-rg`, RBAC, public access on with default Deny, allowed IP `185.72.186.2/32`, Secrets Officer for your user only | Created manually. Dev-scoped private endpoint and VM `Key Vault Secrets User` role are now in Terragrunt code but not applied; they must be destroyed before the app-vault private DNS zone.
 | D2 | Container Registry `websecchatacr` (Basic, ~€0.85/month) | **KEEP** |
 | D3 | Cosmos account `chat-cosmos-cf816eae` (free tier) | **KEEP account, remove data** (dev DB `chat-dev`, container, private endpoint) |
 | D4 | Dev data (Postgres `chat`, Redis, Blob `attachments`, Cosmos `chat-dev`) | **WIPE** (accepted) |
@@ -19,37 +19,38 @@ Stop at the first unexpected resource, error, or dependency.
 ## 1. Preparation (before any destroy)
 
 1. **Done:** operator vault created (D1).
-2. Store, by hand, in the operator vault:
+2. Keep only the operator secrets needed for rebuild in the operator vault:
    - `postgresql-admin-password` (chatadmin)
    - `cloudflare-origin-key` (private key) and `cloudflare-origin-cert` (PEM)
-   - `database-url`, `redis-url`, `better-auth-secret` (copies of the dev values, for rebuild)
-   - Verify each with `az keyvault secret show --query id` (names only).
+   - Runtime app secrets (`database-url`, `redis-url`, `better-auth-secret`) are not retained; the Ansible workflow regenerates them.
+   - Verify secret names/metadata only; never display values.
 3. Record the working release values from `deploy/environments/dev/chat-values.yaml` (already committed).
-4. Remove the **temporary** operator grants now, if still present:
-   - `live/dev/operator-aks-access` (cluster-admin role and AKS DNS link)
-   - `live/dev/operator-secret-access` (Secrets Officer on the app vault)
-   - `live/dev/operator-redis-access` (already removed)
+4. Remove temporary operator grants while dependencies still exist:
+   - `live/dev/operator-aks-access`, `live/dev/operator-secret-access`, `live/dev/operator-redis-access`, and `live/dev/operator-vault-access`
+   - `live/dev/workload-federation` must be destroyed before AKS because its Terragrunt stack reads AKS outputs. This corrects the historical order that left a stale federation state entry.
 
 ## 2. Destroy order
 
 | Step | Stack | Why / notes |
 |---|---|---|
 | 2.1 | Cloudflare DNS record `chat` (manual) | Remove so it does not point at a released public IP |
-| 2.2 | `live/dev/operator-access` | Operator VM, Bastion, NSG, subnet, NIC. Deleting the VM also deletes its OS disk (default). Operator-only |
-| 2.3 | `live/dev/aks` | Deletes the cluster, node pool, and its managed load balancer and resource group. Also invalidates the earlier admin kubeconfig |
-| 2.4 | `live/dev/redis-private-endpoint`, then `live/dev/redis` | Redis cache (~€0.22 per 3 days, largest data-service cost) |
-| 2.5 | `live/dev/cosmos-private-endpoint`, then `live/dev/cosmos-db` (DB and container only) | Keep account per D3; removes data and the endpoint |
-| 2.6 | `live/dev/blob-private-endpoint`, then `live/dev/blob-storage` | Destroys `attachments` data (D4) |
-| 2.7 | `live/dev/key-vault-private-endpoint`, then `live/dev/key-vault` | App vault: soft-deleted for 7 days, purge protection off. Operator copies live in the D1 vault |
-| 2.8 | — | Web PubSub kept (D6). Do not destroy `live/dev/pubsub` |
-| 2.9 | `live/dev/postgresql` | Server and database (D4). Requires the admin password input |
-| 2.10 | `live/dev/postgresql-network` | Sweden VNet and peering. Destroy only after 2.9 |
-| 2.11 | `live/dev/workload-federation`, `live/dev/workload-identity` | Federated credential and app identity |
-| 2.12 | `live/dev/network` | VNet, subnets, static egress and gateway public IPs (€0.12 per 3 days) |
-| 2.13 | Private DNS zones left in `chat-dev-rg` (Redis, Blob, Vault, Cosmos, Postgres) | Removed with their stacks; confirm none remain |
-| 2.14 | — | `chat-dev-rg` is **kept** (holds Web PubSub, ACS/Email). Empty of billable items after steps above |
-| 2.15 | — | Email/ACS kept (D5) |
-| 2.16 | — | ACR and Cosmos account kept (D2, D3) |
+| 2.2 | `operator-aks-access`, `operator-secret-access`, `operator-redis-access`, `operator-vault-access` | Remove temporary Azure roles/DNS access before deleting the VM or target resources |
+| 2.3 | `live/dev/workload-federation` | Remove before AKS so Terragrunt can still read its AKS dependency; avoids stale state |
+| 2.4 | `live/dev/operator-access` | Operator VM, Bastion, NSG, subnet, NIC. Deleting the VM also deletes its OS disk (default). |
+| 2.5 | `live/dev/aks` | Deletes the cluster, node pool, and managed load balancer. Invalidates issued cluster credentials |
+| 2.6 | `live/dev/redis-private-endpoint`, then `live/dev/redis` | Redis cache (historically ~€0.22 per 3 days) |
+| 2.7 | `live/dev/cosmos-private-endpoint`, then `live/dev/cosmos-db` (DB and container only) | Keep account per D3; removes dev data and endpoint |
+| 2.8 | `live/dev/blob-private-endpoint`, then `live/dev/blob-storage` | Destroys `attachments` data (D4) |
+| 2.9 | `live/dev/operator-vault-private-endpoint` | Remove the dev endpoint before destroying the shared Key Vault DNS zone |
+| 2.10 | `live/dev/key-vault-private-endpoint`, then `live/dev/key-vault` | App vault: soft-deleted for 7 days, purge protection off. Operator vault is retained |
+| 2.11 | — | Web PubSub kept (D6). Do not destroy `live/dev/pubsub` |
+| 2.12 | `live/dev/postgresql` | Server and database (D4). Requires the admin password input |
+| 2.13 | `live/dev/postgresql-network` | Sweden VNet and peering. Destroy only after PostgreSQL |
+| 2.14 | `live/dev/workload-identity` | App identity; federation was already removed at step 2.3 |
+| 2.15 | `live/dev/network` | VNet, subnets, static egress and gateway public IPs (historically ~€0.12 per 3 days) |
+| 2.16 | Private DNS zones left in `chat-dev-rg` | Removed with their owning stacks; confirm none remain |
+| 2.17 | — | `chat-dev-rg` is **kept** (holds Web PubSub, ACS/Email) |
+| 2.18 | — | Email/ACS, ACR and Cosmos account are kept (D2, D3, D5) |
 
 Helm releases (`chat`, `nginx-gateway-fabric`) and the `chat-tls` Secret go with the cluster in 2.3; no separate step is needed.
 

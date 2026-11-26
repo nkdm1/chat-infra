@@ -1,0 +1,210 @@
+---
+- name: Configure private AKS and deploy the chat release
+  hosts: operator
+  gather_facts: true
+  tasks:
+    - name: Download pinned Gateway API standard CRDs
+      ansible.builtin.get_url:
+        url: https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.4.1/standard-install.yaml
+        dest: /dev/shm/gateway-api-standard-install.yaml
+        mode: "0600"
+      register: gateway_api_manifest
+
+    - name: Apply Gateway API CRDs
+      ansible.builtin.command:
+        argv:
+          - kubectl
+          - apply
+          - --server-side
+          - --filename
+          - /dev/shm/gateway-api-standard-install.yaml
+      register: gateway_api_apply
+      changed_when: "'configured' in gateway_api_apply.stdout or 'created' in gateway_api_apply.stdout"
+
+    - name: Wait for Gateway API CRD establishment
+      ansible.builtin.command:
+        argv:
+          - kubectl
+          - wait
+          - --for=condition=Established
+          - --timeout=180s
+          - crd/gateways.gateway.networking.k8s.io
+      changed_when: false
+
+    - name: Install or upgrade NGINX Gateway Fabric
+      ansible.builtin.command:
+        argv:
+          - helm
+          - upgrade
+          - --install
+          - nginx-gateway-fabric
+          - oci://ghcr.io/nginx/charts/nginx-gateway-fabric
+          - --version
+          - 2.9.1
+          - --namespace
+          - nginx-gateway
+          - --create-namespace
+          - --wait
+          - --timeout
+          - 10m
+      register: nginx_gateway_release
+      changed_when: "'has been upgraded' in nginx_gateway_release.stdout or 'has been installed' in nginx_gateway_release.stdout"
+
+    - name: Wait for NGINX controller deployment
+      ansible.builtin.command:
+        argv:
+          - kubectl
+          - wait
+          - --for=condition=Available
+          - --all
+          - deployments
+          - --namespace
+          - nginx-gateway
+          - --timeout=300s
+      changed_when: false
+
+    - name: Wait for the nginx GatewayClass to be accepted
+      ansible.builtin.command:
+        argv:
+          - kubectl
+          - wait
+          - --for=condition=Accepted
+          - gatewayclass/nginx
+          - --timeout=300s
+      changed_when: false
+
+    - name: Ensure the application namespace exists
+      ansible.builtin.command:
+        argv:
+          - kubectl
+          - create
+          - namespace
+          - chat
+          - --dry-run=client
+          - -o
+          - yaml
+      register: chat_namespace_yaml
+      changed_when: false
+
+    - name: Apply the application namespace
+      ansible.builtin.command:
+        argv:
+          - kubectl
+          - apply
+          - --filename
+          - -
+        stdin: "{{ chat_namespace_yaml.stdout }}"
+      register: chat_namespace_apply
+      changed_when: "'created' in chat_namespace_apply.stdout"
+
+    - name: Create or update chat-tls from the operator vault
+      ansible.builtin.command:
+        argv:
+          - python3
+          - /opt/chat-infra/scripts/provision_tls_secret.py
+      environment:
+        OPERATOR_KEY_VAULT_NAME: "{{ lookup('env', 'OPERATOR_KEY_VAULT_NAME') }}"
+        KUBECONFIG: "{{ lookup('env', 'KUBECONFIG') }}"
+      register: tls_secret_provisioning
+      changed_when: "'applied' in tls_secret_provisioning.stdout"
+      no_log: true
+
+    - name: Create a unique migration Job name for this run
+      ansible.builtin.set_fact:
+        migration_job_name: "chat-db-migrate-{{ ansible_date_time.epoch }}"
+
+    - name: Install Helm release in migration-only mode
+      ansible.builtin.command:
+        argv:
+          - helm
+          - upgrade
+          - --install
+          - chat
+          - /opt/chat-infra/deploy/chat
+          - --namespace
+          - chat
+          - --create-namespace
+          - --values
+          - "{{ lookup('env', 'CHAT_VALUES_PATH') }}"
+          - --set
+          - app.enabled=false
+          - --set
+          - migration.enabled=true
+          - --set-string
+          - "migration.jobName={{ migration_job_name }}"
+          - --wait
+          - --timeout
+          - 10m
+      register: migration_release
+      changed_when: true
+
+    - name: Wait for database migration Job to complete
+      ansible.builtin.command:
+        argv:
+          - kubectl
+          - wait
+          - --for=condition=complete
+          - "job/{{ migration_job_name }}"
+          - --namespace
+          - chat
+          - --timeout=600s
+      changed_when: false
+
+    - name: Upgrade Helm release to run the application
+      ansible.builtin.command:
+        argv:
+          - helm
+          - upgrade
+          - --install
+          - chat
+          - /opt/chat-infra/deploy/chat
+          - --namespace
+          - chat
+          - --create-namespace
+          - --values
+          - "{{ lookup('env', 'CHAT_VALUES_PATH') }}"
+          - --set
+          - app.enabled=true
+          - --set
+          - migration.enabled=false
+          - --wait
+          - --timeout
+          - 10m
+      register: app_release
+      changed_when: true
+
+    - name: Wait for the chat application rollout
+      ansible.builtin.command:
+        argv:
+          - kubectl
+          - rollout
+          - status
+          - deployment/chat
+          - --namespace
+          - chat
+          - --timeout=300s
+      changed_when: false
+
+    - name: Wait for the HTTPS Gateway to be programmed
+      ansible.builtin.command:
+        argv:
+          - kubectl
+          - wait
+          - --for=condition=Programmed
+          - gateway/chat
+          - --namespace
+          - chat
+          - --timeout=300s
+      changed_when: false
+
+    - name: Wait for the chat HTTPRoute to be accepted
+      ansible.builtin.command:
+        argv:
+          - kubectl
+          - wait
+          - --for=condition=Accepted
+          - httproute/chat
+          - --namespace
+          - chat
+          - --timeout=300s
+      changed_when: false

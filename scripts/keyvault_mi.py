@@ -21,6 +21,14 @@ class KeyVaultReadError(RuntimeError):
     """A safe-to-log Key Vault read failure (never includes response body)."""
 
 
+class KeyVaultSecretNotFound(KeyVaultReadError):
+    """The requested secret does not exist in the vault."""
+
+
+class KeyVaultWriteError(RuntimeError):
+    """A safe-to-log Key Vault write failure."""
+
+
 @lru_cache(maxsize=4)
 def get_access_token(resource: str) -> str:
     query = urllib.parse.urlencode(
@@ -62,6 +70,8 @@ def get_secret(vault_name: str, secret_name: str) -> str:
         with urllib.request.urlopen(request, timeout=15) as response:
             payload = json.load(response)
     except urllib.error.HTTPError as exc:
+        if exc.code == 404:
+            raise KeyVaultSecretNotFound("Key Vault secret does not exist") from None
         raise KeyVaultReadError(
             f"Key Vault secret read failed (HTTP {exc.code}); check network and RBAC"
         ) from None
@@ -72,3 +82,42 @@ def get_secret(vault_name: str, secret_name: str) -> str:
     if not isinstance(value, str) or not value:
         raise KeyVaultReadError("Key Vault returned an empty or invalid secret")
     return value
+
+
+def set_secret_if_absent(vault_name: str, secret_name: str, value: str) -> None:
+    """Create a secret only when absent; never intentionally overwrite it.
+
+    The existence check and write are not atomic. Callers must prevent concurrent
+    writers and inspect metadata after any partial failure.
+    """
+    if not isinstance(value, str) or not value:
+        raise ValueError("secret value must be a non-empty string")
+    try:
+        get_secret(vault_name, secret_name)
+    except KeyVaultSecretNotFound:
+        pass
+    else:
+        raise KeyVaultWriteError("Key Vault secret already exists; refusing to overwrite")
+
+    token = get_access_token("https://vault.azure.net")
+    url = (
+        f"https://{vault_name}.vault.azure.net/secrets/"
+        f"{urllib.parse.quote(secret_name, safe='')}"
+        f"?api-version={KEY_VAULT_API_VERSION}"
+    )
+    request = urllib.request.Request(
+        url,
+        data=json.dumps({"value": value}).encode("utf-8"),
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+        },
+        method="PUT",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=15):
+            return
+    except urllib.error.HTTPError as exc:
+        raise KeyVaultWriteError(f"Key Vault secret write failed (HTTP {exc.code})") from None
+    except (urllib.error.URLError, TimeoutError):
+        raise KeyVaultWriteError("Key Vault secret write failed; check DNS and connectivity") from None

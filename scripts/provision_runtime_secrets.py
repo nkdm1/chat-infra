@@ -107,9 +107,12 @@ def main() -> int:
     headers = vault_headers(vault_token)
     existing = list_secret_names(vault_url, headers)
     conflicts = existing.intersection(TARGET_SECRETS)
+    if conflicts == set(TARGET_SECRETS):
+        print("runtime secrets already exist; no changes made")
+        return 0
     if conflicts:
         raise ProvisionError(
-            "Target secret(s) already exist; no values were changed. Inspect metadata and handle rotation explicitly."
+            "Only part of the target secret set exists; inspect metadata and recover explicitly."
         )
 
     arm_token = get_access_token(ARM_BASE + "/")
@@ -166,4 +169,7 @@ if __name__ == "__main__":
         raise SystemExit(main())
     except ProvisionError as exc:
         print(str(exc), file=sys.stderr)
+        raise SystemExit(1)
+    except Exception:
+        print("Runtime-secret provisioning failed; inspect safe metadata and access", file=sys.stderr)
         raise SystemExit(1)

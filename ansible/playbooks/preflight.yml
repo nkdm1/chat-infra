@@ -1,0 +1,19 @@
+---
+- name: Validate operator automation inputs
+  hosts: operator
+  gather_facts: false
+  tasks:
+    - name: Require non-secret resource configuration
+      ansible.builtin.assert:
+        that:
+          - lookup('env', 'ARM_SUBSCRIPTION_ID') | length > 0
+          - lookup('env', 'OPERATOR_KEY_VAULT_NAME') | length > 0
+          - lookup('env', 'APP_KEY_VAULT_NAME') | length > 0
+          - lookup('env', 'POSTGRES_HOST') | length > 0
+          - lookup('env', 'REDIS_HOSTNAME') | length > 0
+          - lookup('env', 'REDIS_ENTERPRISE_NAME') | length > 0
+          - lookup('env', 'DEV_RESOURCE_GROUP') | length > 0
+          - lookup('env', 'CHAT_VALUES_PATH') | length > 0
+          - lookup('env', 'KUBECONFIG') | length > 0
+        fail_msg: "Required operator configuration is missing; no secret values were inspected."
+      changed_when: false

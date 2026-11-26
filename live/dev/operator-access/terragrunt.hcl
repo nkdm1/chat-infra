@@ -27,7 +27,7 @@ inputs = {
   subnet_name             = "chat-${local.env}-operator-subnet"
   subnet_address_prefixes = ["10.2.2.0/24"]
   vm_size                 = "Standard_B2ls_v2"
-  admin_username          = "operator"
+  admin_username          = "chatoperator"
   ssh_public_key          = get_env("OPERATOR_SSH_PUBLIC_KEY")
   env                     = local.env
 }
