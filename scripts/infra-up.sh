@@ -157,16 +157,16 @@ get_postgresql_sku_candidates() {
       Failed)
         # A failed prior create must advance past the SKU Azure reports on that resource.
         case "$existing_sku" in
-          B_Standard_B1ms) printf '%s\n' B_Standard_B2s B_Standard_B2ats_v2 ;;
-          B_Standard_B2s) printf '%s\n' B_Standard_B2ats_v2 ;;
-          B_Standard_B2ats_v2) fail "All configured PostgreSQL SKUs were already attempted; inspect Azure state before retrying" ;;
+          B_Standard_B1ms) printf '%s\n' B_Standard_B2s B_Standard_B2ms ;;
+          B_Standard_B2s|B_Standard_B2ats_v2) printf '%s\n' B_Standard_B2ms ;;
+          B_Standard_B2ms) fail "All configured PostgreSQL SKUs were already attempted; inspect Azure state before retrying" ;;
           *) fail "PostgreSQL is in Failed state with unrecognized SKU $existing_sku; inspect Azure before retrying" ;;
         esac
         ;;
       *) fail "PostgreSQL server is in state $server_state; wait or inspect it before planning" ;;
     esac
   elif grep -Eqi 'ResourceNotFound|was not found|could not be found' "$error_file"; then
-    printf '%s\n' B_Standard_B1ms B_Standard_B2s B_Standard_B2ats_v2
+    printf '%s\n' B_Standard_B1ms B_Standard_B2s B_Standard_B2ms
   else
     cat "$error_file" >&2
     fail "Could not determine the PostgreSQL server SKU; stopped before planning it"
