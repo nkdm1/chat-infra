@@ -210,14 +210,27 @@
           - --timeout=300s
       changed_when: false
 
-    - name: Wait for the chat HTTPRoute to be accepted
+    - name: Poll the chat HTTPRoute parent conditions
       ansible.builtin.command:
         argv:
           - kubectl
-          - wait
-          - --for=condition=Accepted
-          - httproute/chat
+          - get
+          - httproute
+          - chat
           - --namespace
           - chat
-          - --timeout=300s
+          - --output=jsonpath={range .status.parents[?(@.controllerName=="gateway.nginx.org/nginx-gateway-controller")].conditions[*]}{.type}={.status},{end}
+      register: chat_route_conditions
       changed_when: false
+      retries: 60
+      delay: 5
+      until: chat_route_conditions.stdout | trim != ""
+
+    - name: Require the chat HTTPRoute to be accepted with resolved references
+      ansible.builtin.assert:
+        that:
+          - "'Accepted=True' in chat_route_conditions.stdout"
+          - "'ResolvedRefs=True' in chat_route_conditions.stdout"
+        fail_msg: >-
+          The chat HTTPRoute was reconciled but not accepted or its references are unresolved:
+          {{ chat_route_conditions.stdout | trim }}
