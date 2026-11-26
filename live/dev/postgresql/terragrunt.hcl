@@ -24,8 +24,9 @@ dependency "postgresql_network" {
   config_path = "../postgresql-network"
 }
 
-# The operator supplies TF_VAR_administrator_password securely; it is ephemeral
-# and must not be passed through Terragrunt inputs or written to state.
+# scripts/infra-up.sh supplies this as an ephemeral process environment value
+# through scripts/terragrunt_with_postgres_admin_secret.py. Never pass it through
+# Terragrunt inputs or write it to state.
 inputs = {
   name                           = "chat-${local.env}-${local.subscription_suffix}-se-pg"
   dns_link_name_prefix           = "chat-${local.env}-${local.subscription_suffix}-pg"

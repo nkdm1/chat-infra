@@ -2,6 +2,7 @@
 # Destroy only the dev stacks listed in docs/teardown-plan.md.
 # Every changing destroy requires a reviewed plan and explicit local approval.
 set -euo pipefail
+set +x
 umask 077
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -58,6 +59,7 @@ purge_dev_app_vault_if_deleted() {
 
 command -v az >/dev/null 2>&1 || fail "Required tool not found: az"
 command -v terragrunt >/dev/null 2>&1 || fail "Required tool not found: terragrunt"
+command -v python3 >/dev/null 2>&1 || fail "Required tool not found: python3"
 load_operator_ssh_public_key || fail "Could not load an approved operator SSH public key"
 
 actual_subscription="$(az account show --query id -o tsv)"
@@ -65,7 +67,6 @@ actual_subscription="$(az account show --query id -o tsv)"
 export ARM_SUBSCRIPTION_ID="$actual_subscription"
 [[ -n "${POSTGRESQL_SKU:-}" ]] || fail "Set POSTGRESQL_SKU to the configured, reviewed server SKU"
 export POSTGRESQL_SKU
-[[ -n "${TF_VAR_administrator_password:-}" ]] || fail "Load TF_VAR_administrator_password through the approved secret-safe process"
 
 cat <<'EOF'
 This command will destroy dev stacks only. It will not destroy shared services,
@@ -78,12 +79,22 @@ printf "After that manual DNS check, type exactly 'dns-removed' to continue: "
 IFS= read -r dns_confirmation
 [[ "$dns_confirmation" == "dns-removed" ]] || fail "DNS removal was not confirmed; stopped"
 
+run_terragrunt() {
+  local stack="$1"
+  shift
+  if [[ "$stack" == "live/dev/postgresql" ]]; then
+    python3 "$ROOT/scripts/terragrunt_with_postgres_admin_secret.py" --mode read -- terragrunt "$@"
+  else
+    terragrunt "$@"
+  fi
+}
+
 for stack in "${stacks[@]}"; do
   stack_dir="$ROOT/$stack"
   [[ -f "$stack_dir/terragrunt.hcl" ]] || fail "Missing stack configuration: $stack"
   printf '\n========== Terragrunt destroy plan: %s ==========\n' "$stack"
   plan_output="$(mktemp)"
-  if ! (cd "$stack_dir" && terragrunt plan -destroy -no-color) 2>&1 | tee "$plan_output"; then
+  if ! (cd "$stack_dir" && run_terragrunt "$stack" plan -destroy -no-color) 2>&1 | tee "$plan_output"; then
     rm -f "$plan_output"
     fail "Destroy plan failed for $stack; stopped without destroying this stack"
   fi
@@ -99,7 +110,7 @@ for stack in "${stacks[@]}"; do
   printf "Review the destroy plan above. To approve this stack, type exactly: destroy %s\n> " "$stack"
   IFS= read -r approval
   [[ "$approval" == "destroy $stack" ]] || fail "Destroy approval not received for $stack; stopped"
-  (cd "$stack_dir" && terragrunt destroy)
+  (cd "$stack_dir" && run_terragrunt "$stack" destroy)
   if [[ "$stack" == "live/dev/key-vault" ]]; then
     purge_dev_app_vault_if_deleted
   fi

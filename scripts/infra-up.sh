@@ -2,6 +2,7 @@
 # Provision dev infrastructure locally, then trigger VM-local Ansible via Azure Run Command.
 # No apply uses -auto-approve; each changing stack needs explicit local approval.
 set -euo pipefail
+set +x
 umask 077
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -57,7 +58,6 @@ deleted_app_vault="$(az keyvault list-deleted --query "[?name=='chat-dev-cf816ea
 
 [[ -n "${POSTGRESQL_SKU:-}" ]] || fail "Set POSTGRESQL_SKU to a reviewed, currently available SKU"
 export POSTGRESQL_SKU
-[[ -n "${TF_VAR_administrator_password:-}" ]] || fail "Load TF_VAR_administrator_password through the approved secret-safe process"
 
 # The VM must fetch playbooks from public main. Stop before any apply if local
 # infra/Ansible code differs from the published branch or has uncommitted files.
@@ -70,12 +70,22 @@ if [[ -n "$(git -C "$ROOT" status --porcelain -- "${relevant_paths[@]}")" ]]; th
   fail "Relevant files have uncommitted changes; commit and publish them before provisioning"
 fi
 
+run_terragrunt() {
+  local mode="$1" stack="$2"
+  shift 2
+  if [[ "$stack" == "live/dev/postgresql" ]]; then
+    python3 "$ROOT/scripts/terragrunt_with_postgres_admin_secret.py" --mode "$mode" -- terragrunt "$@"
+  else
+    terragrunt "$@"
+  fi
+}
+
 for stack in "${stacks[@]}"; do
   stack_dir="$ROOT/$stack"
   [[ -f "$stack_dir/terragrunt.hcl" ]] || fail "Missing stack configuration: $stack"
   printf '\n========== Terragrunt plan: %s ==========\n' "$stack"
   plan_output="$(mktemp)"
-  if ! (cd "$stack_dir" && terragrunt plan -no-color) 2>&1 | tee "$plan_output"; then
+  if ! (cd "$stack_dir" && run_terragrunt ensure "$stack" plan -no-color) 2>&1 | tee "$plan_output"; then
     rm -f "$plan_output"
     fail "Plan failed for $stack; stopped without applying this stack"
   fi
@@ -88,7 +98,7 @@ for stack in "${stacks[@]}"; do
   printf "Review the plan above. To approve this stack, type exactly: apply %s\n> " "$stack"
   IFS= read -r approval
   [[ "$approval" == "apply $stack" ]] || fail "Approval not received for $stack; stopped"
-  (cd "$stack_dir" && terragrunt apply)
+  (cd "$stack_dir" && run_terragrunt read "$stack" apply)
 done
 
 # Read only non-secret Terraform outputs for the VM's Ansible configuration.

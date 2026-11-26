@@ -5,7 +5,7 @@
 - Kept: Web PubSub Free, email/ACS, `websecchatacr`, Cosmos account (no data), operator vault `chat-ops-cf816eae-kv`, `chat-dev-rg`, `chat-shared-rg`, Terraform state backend.
 - One leftover Terraform state entry: `live/dev/workload-federation` (no cost; cannot be read without the deleted AKS outputs).
 - Runbook for rebuild: `docs/runbook-dev-bringup.md`. Non-secret chart values: `deploy/environments/dev/chat-values.yaml`.
-- 2026-11-27 update: the user pushed commit `320e79a` to public `origin/main`; local `main` is synchronized. The soft-deleted dev app vault was purged after explicit user approval. No infrastructure provisioning has started; the new teardown-purge change is being prepared locally and is not yet on `main`.
+- 2026-11-27 update: the user pushed commit `320e79a` to public `origin/main`; `origin/main` now also contains the approved app-vault teardown-purge change. The soft-deleted dev app vault was purged after explicit user approval. The SSH-key loader (`0ff361e`) and the new admin-secret workflow are local/unpublished. No infrastructure provisioning has started. The requested default `~/.ssh/chat-operator.pub` file is currently absent, so the wrapper will abort until it exists.
 
 ## 1. Cost monitoring (ongoing)
 - Latest Cost Analysis shows €3.10 actual cost; this is acceptable. Continue monitoring for the next 24 hours, then review again for delayed charges.
@@ -23,7 +23,8 @@
 - [x] Added workstation wrappers that use the active Azure CLI login for local Terragrunt and Azure VM Run Command; no Azure credentials are copied to the VM.
 - [x] `infra up` prints each plan and requires stack-specific approval before apply, then triggers VM-local Ansible. It requires reviewed code on public `main` and renders fresh non-secret Helm values from Terraform outputs.
 - [x] `infra down` follows the teardown order, preserves shared resources and state, pauses for manual Cloudflare DNS deletion, and requires stack-specific destroy approval. Workload federation is destroyed before AKS to avoid stale Terragrunt dependencies.
-- [ ] Review scripts carefully and validate with read-only plans first. No Terragrunt plan/apply/destroy or Azure VM Run Command has been executed; wrapper behavior remains untested. The user-approved dev app-vault purge was performed separately on 2026-11-27.
+- [x] Added a local Terragrunt password wrapper that generates a cryptographically random PostgreSQL admin password only when Azure reports the server absent, writes a Key Vault secret version through the REST body, temporarily opens/removes the workstation IP rule, and runs Terragrunt with the value only in its child environment. Added mock-based unit tests for generation, reuse, CIDR matching, and firewall-rule cleanup.
+- [ ] Review the password/network code and validate with read-only plans only after publishing it. Unit/syntax tests pass, but no Terragrunt plan/apply/destroy, Key Vault network-rule update/secret write, or Azure VM Run Command has been executed. The user-approved dev app-vault purge was performed separately on 2026-11-27.
 
 ## 4. Monitoring (basic)
 - Container Insights / Azure Monitor for AKS: node CPU and memory, pod restarts, node load.
