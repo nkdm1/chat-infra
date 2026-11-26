@@ -5,6 +5,7 @@
 - Kept: Web PubSub Free, email/ACS, `websecchatacr`, Cosmos account (no data), operator vault `chat-ops-cf816eae-kv`, `chat-dev-rg`, `chat-shared-rg`, Terraform state backend.
 - One leftover Terraform state entry: `live/dev/workload-federation` (no cost; cannot be read without the deleted AKS outputs).
 - Runbook for rebuild: `docs/runbook-dev-bringup.md`. Non-secret chart values: `deploy/environments/dev/chat-values.yaml`.
+- 2026-11-27 update: the user pushed commit `320e79a` to public `origin/main`; local `main` is synchronized. The soft-deleted dev app vault was purged after explicit user approval. No infrastructure provisioning has started; the new teardown-purge change is being prepared locally and is not yet on `main`.
 
 ## 1. Cost monitoring (ongoing)
 - Latest Cost Analysis shows €3.10 actual cost; this is acceptable. Continue monitoring for the next 24 hours, then review again for delayed charges.
@@ -16,13 +17,13 @@
 - [x] Added Ansible playbooks for PostgreSQL app-role/database URL, Redis runtime secrets, Gateway API CRDs, NGINX Gateway Fabric, TLS Secret, migration and app Helm releases.
 - [x] Added VM cloud-init bootstrap, switched the guest username to `chatoperator`, and selected workstation-triggered Azure VM Run Command. The VM checks out public GitHub `main`; no Bastion/SSH login is part of automation.
 - [x] Added Terragrunt code for operator-vault private connectivity/DNS and Key Vault Secrets User access for the VM identity. It is not applied and adds recurring private-endpoint cost.
-- [ ] Publish/merge the reviewed code to public `main`, then test the full VM bootstrap/Ansible flow during an approved dev rebuild. The workstation has no `ansible-playbook`, and no Azure call was made in this session.
+- [ ] Publish/merge the reviewed code to public `main`, then test the full VM bootstrap/Ansible flow during an approved dev rebuild. The workstation has no `ansible-playbook`; no VM Run Command or infrastructure provisioning has been executed.
 
 ## 3. `infra up` / `infra down` scripts
 - [x] Added workstation wrappers that use the active Azure CLI login for local Terragrunt and Azure VM Run Command; no Azure credentials are copied to the VM.
 - [x] `infra up` prints each plan and requires stack-specific approval before apply, then triggers VM-local Ansible. It requires reviewed code on public `main` and renders fresh non-secret Helm values from Terraform outputs.
 - [x] `infra down` follows the teardown order, preserves shared resources and state, pauses for manual Cloudflare DNS deletion, and requires stack-specific destroy approval. Workload federation is destroyed before AKS to avoid stale Terragrunt dependencies.
-- [ ] Review scripts carefully and validate with read-only plans first. No apply/destroy or Azure VM Run Command was executed in this session; wrapper behavior remains untested.
+- [ ] Review scripts carefully and validate with read-only plans first. No Terragrunt plan/apply/destroy or Azure VM Run Command has been executed; wrapper behavior remains untested. The user-approved dev app-vault purge was performed separately on 2026-11-27.
 
 ## 4. Monitoring (basic)
 - Container Insights / Azure Monitor for AKS: node CPU and memory, pod restarts, node load.

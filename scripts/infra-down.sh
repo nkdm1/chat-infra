@@ -33,6 +33,28 @@ stacks=(
 )
 
 fail() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
+
+purge_dev_app_vault_if_deleted() {
+  local deleted_app_vault confirmation remaining
+  deleted_app_vault="$(az keyvault list-deleted --subscription "$EXPECTED_SUBSCRIPTION_ID" --query "[?name=='chat-dev-cf816eae-kv'].name | [0]" -o tsv)" || fail "Could not check the app Key Vault soft-delete state"
+  if [[ -z "$deleted_app_vault" ]]; then
+    printf 'No soft-deleted dev app Key Vault to purge.\n'
+    return
+  fi
+
+  printf '\nThe dev app Key Vault is soft-deleted. Purging permanently deletes its secrets.\n'
+  printf "To approve this app-vault-only purge, type exactly 'purge chat-dev-cf816eae-kv': "
+  IFS= read -r confirmation
+  [[ "$confirmation" == "purge chat-dev-cf816eae-kv" ]] || fail "App Key Vault purge was not approved; stopped"
+  az keyvault purge \
+    --name chat-dev-cf816eae-kv \
+    --location belgiumcentral \
+    --subscription "$EXPECTED_SUBSCRIPTION_ID"
+  remaining="$(az keyvault list-deleted --subscription "$EXPECTED_SUBSCRIPTION_ID" --query "[?name=='chat-dev-cf816eae-kv'].name | [0]" -o tsv)" || fail "Could not verify app Key Vault purge"
+  [[ -z "$remaining" ]] || fail "App Key Vault is still listed as soft-deleted; verify purge completion before bring-up"
+  printf 'Dev app Key Vault purged; the operator vault was not touched.\n'
+}
+
 command -v az >/dev/null 2>&1 || fail "Required tool not found: az"
 command -v terragrunt >/dev/null 2>&1 || fail "Required tool not found: terragrunt"
 
@@ -47,7 +69,9 @@ export OPERATOR_SSH_PUBLIC_KEY
 
 cat <<'EOF'
 This command will destroy dev stacks only. It will not destroy shared services,
-chat-dev-rg, chat-shared-rg, or the Terraform state backend.
+chat-dev-rg, chat-shared-rg, or the Terraform state backend. After the dev app
+Key Vault stack is destroyed, the script can permanently purge its soft-deleted
+vault after a separate typed confirmation. The operator vault is never purged.
 Before continuing, remove or verify absence of the Cloudflare `chat` DNS record.
 EOF
 printf "After that manual DNS check, type exactly 'dns-removed' to continue: "
@@ -66,6 +90,9 @@ for stack in "${stacks[@]}"; do
   if grep -Eq 'No changes\.' "$plan_output"; then
     printf 'No changes for %s; skipping destroy.\n' "$stack"
     rm -f "$plan_output"
+    if [[ "$stack" == "live/dev/key-vault" ]]; then
+      purge_dev_app_vault_if_deleted
+    fi
     continue
   fi
   rm -f "$plan_output"
@@ -73,6 +100,9 @@ for stack in "${stacks[@]}"; do
   IFS= read -r approval
   [[ "$approval" == "destroy $stack" ]] || fail "Destroy approval not received for $stack; stopped"
   (cd "$stack_dir" && terragrunt destroy)
+  if [[ "$stack" == "live/dev/key-vault" ]]; then
+    purge_dev_app_vault_if_deleted
+  fi
 done
 
 cat <<'EOF'

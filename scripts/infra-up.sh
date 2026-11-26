@@ -51,7 +51,7 @@ actual_subscription="$(az account show --query id -o tsv)"
 export ARM_SUBSCRIPTION_ID="$actual_subscription"
 
 deleted_app_vault="$(az keyvault list-deleted --query "[?name=='chat-dev-cf816eae-kv'].name | [0]" -o tsv)" || fail "Could not check soft-deleted Key Vaults; verify Key Vault name availability before provisioning"
-[[ -z "$deleted_app_vault" ]] || fail "The app Key Vault is still soft-deleted; stop and choose recovery/purge explicitly before provisioning"
+[[ -z "$deleted_app_vault" ]] || fail "The app Key Vault is still soft-deleted; complete the reviewed infra-down workflow (including its explicit purge confirmation) or handle the vault explicitly before provisioning"
 
 [[ -n "${POSTGRESQL_SKU:-}" ]] || fail "Set POSTGRESQL_SKU to a reviewed, currently available SKU"
 export POSTGRESQL_SKU

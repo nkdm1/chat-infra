@@ -42,7 +42,7 @@ Stop at the first unexpected resource, error, or dependency.
 | 2.7 | `live/dev/cosmos-private-endpoint`, then `live/dev/cosmos-db` (DB and container only) | Keep account per D3; removes dev data and endpoint |
 | 2.8 | `live/dev/blob-private-endpoint`, then `live/dev/blob-storage` | Destroys `attachments` data (D4) |
 | 2.9 | `live/dev/operator-vault-private-endpoint` | Remove the dev endpoint before destroying the shared Key Vault DNS zone |
-| 2.10 | `live/dev/key-vault-private-endpoint`, then `live/dev/key-vault` | App vault: soft-deleted for 7 days, purge protection off. Operator vault is retained |
+| 2.10 | `live/dev/key-vault-private-endpoint`, then `live/dev/key-vault` | The dev app vault is soft-deleted for 7 days, with purge protection off. `infra-down.sh` separately requires the exact typed confirmation `purge chat-dev-cf816eae-kv` before purging it; this permanently deletes runtime secrets. Operator vault is retained and never purged by the wrapper |
 | 2.11 | — | Web PubSub kept (D6). Do not destroy `live/dev/pubsub` |
 | 2.12 | `live/dev/postgresql` | Server and database (D4). Requires the admin password input |
 | 2.13 | `live/dev/postgresql-network` | Sweden VNet and peering. Destroy only after PostgreSQL |
@@ -99,3 +99,5 @@ Approved decisions are recorded above. Next: you store the secrets in `chat-ops-
 Remaining: `chat-dev-cf816eae-wps` (Web PubSub Free), `chat-dev-acs` + `chat-dev-email`, `websecchatacr` (Basic), `chat-github-publisher`, `chat-cosmos-cf816eae` (free tier, no data), `chat-ops-cf816eae-kv` (operator secrets, public access restricted to 185.72.186.2). The Terraform state backend was not touched.
 
 Verification done: no VMs, Bastion, AKS, private endpoints, or public IPs remain in any subscription resource group. Billing must be rechecked over the next 48–72 hours to confirm the Virtual Network, Redis, VM, and IP lines drop to zero.
+
+Subsequent app-vault action (2026-11-27): the user explicitly authorized purging soft-deleted `chat-dev-cf816eae-kv`. `az keyvault purge` completed; `az keyvault list-deleted` returned no matching vault, and `az keyvault show` confirmed no active vault. The operator vault was not touched. The future dev teardown wrapper now includes a separate typed purge confirmation after destroying the app-vault stack.
