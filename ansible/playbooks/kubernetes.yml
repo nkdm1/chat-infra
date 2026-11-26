@@ -92,7 +92,7 @@
           - kubectl
           - apply
           - --filename
-          - -
+          - "-"
         stdin: "{{ chat_namespace_yaml.stdout }}"
       register: chat_namespace_apply
       changed_when: "'created' in chat_namespace_apply.stdout"
