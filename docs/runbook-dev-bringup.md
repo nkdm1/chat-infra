@@ -46,7 +46,7 @@ This document separates **what is automated by checked-in code** from **operator
 
 ## 3. Infrastructure stacks (ordered; guarded wrapper or manual)
 
-Run each command from the infra repository root. `POSTGRESQL_SKU` remains an explicit, reviewed input. The guarded wrappers load `OPERATOR_SSH_PUBLIC_KEY` from the selected public-key file. At the PostgreSQL stack, the helper checks Azure for the server: if absent, it generates a cryptographically random admin password and writes a new version of `postgresql-admin-password` to the operator vault; if present, it reads and reuses that secret. It temporarily adds the workstation IP to the vault firewall only after typed approval, removes the rule before Terragrunt runs, and passes the password only in Terragrunt's process environment. The VM later reads the same value using its managed identity.
+Run each command from the infra repository root. The dev PostgreSQL stack pins `B_Standard_B1ms`; recheck region availability, policy and cost before provisioning. The guarded wrappers load `OPERATOR_SSH_PUBLIC_KEY` from the selected public-key file. At the PostgreSQL stack, the helper checks Azure for the server: if absent, it generates a cryptographically random admin password and writes a new version of `postgresql-admin-password` to the operator vault; if present, it reads and reuses that secret. It temporarily adds the workstation IP to the vault firewall only after typed approval, removes the rule before Terragrunt runs, and passes the password only in Terragrunt's process environment. The VM later reads the same value using its managed identity.
 
 Example pattern for **each** stack:
 
@@ -73,7 +73,7 @@ Then move to the next stack. Return to the repo root with `cd ../..` as needed, 
 | 6 | `live/dev/network` | Belgium Central VNet and app/AKS/private endpoint subnets, network-owned static IPs. |
 | 7 | `live/dev/workload-identity` | App managed identity. |
 | 8 | `live/dev/postgresql-network` | Sweden Central PostgreSQL VNet/subnet and peering to dev VNet. |
-| 9 | `live/dev/postgresql` | Private PostgreSQL server and database. Requires a reviewed `POSTGRESQL_SKU`. The wrapper stages a new operator-vault password version only when the server is absent; on retries it reuses the latest secret. |
+| 9 | `live/dev/postgresql` | Private PostgreSQL server and database, pinned to `B_Standard_B1ms` (Burstable). Verify current availability, policy, quota and cost before applying. The wrapper stages a new operator-vault password version only when the server is absent; on retries it reuses the latest secret. |
 | 10 | `live/dev/cosmos-db` | Dev database/container and app data role on shared Cosmos account. |
 | 11 | `live/dev/cosmos-private-endpoint` | Private route/DNS from dev VNet to Cosmos. |
 | 12 | `live/dev/key-vault` | App runtime vault; never put administrator credentials here. |

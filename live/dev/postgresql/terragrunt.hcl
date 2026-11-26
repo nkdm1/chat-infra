@@ -37,7 +37,7 @@ inputs = {
   additional_virtual_network_ids = { sweden = dependency.postgresql_network.outputs.virtual_network_id }
   private_dns_zone_name          = "chat-${local.env}.postgres.database.azure.com"
   postgresql_version             = "17"
-  sku_name                       = get_env("POSTGRESQL_SKU")
+  sku_name                       = "B_Standard_B1ms"
   storage_mb                     = 32768
   backup_retention_days          = 7
   administrator_login            = "chatadmin"
