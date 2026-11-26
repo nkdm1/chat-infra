@@ -48,6 +48,12 @@ resource "azurerm_kubernetes_cluster" "this" {
     os_sku               = "Ubuntu"
     os_disk_type         = "Managed"
     vnet_subnet_id       = var.aks_subnet_id
+
+    upgrade_settings {
+      max_surge                     = "10%"
+      drain_timeout_in_minutes      = 0
+      node_soak_duration_in_minutes = 0
+    }
   }
 
   identity {
