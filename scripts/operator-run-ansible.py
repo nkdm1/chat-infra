@@ -79,6 +79,7 @@ def main() -> int:
 
         env = os.environ.copy()
         env.update({key: value for key, value in config.items() if key != "CHAT_VALUES_YAML"})
+        inventory_path = REPO / "ansible/inventory/localhost.yml"
         env.update(
             {
                 "AZURE_CONFIG_DIR": str(azure_config),
@@ -90,6 +91,23 @@ def main() -> int:
                 "ANSIBLE_NOCOLOR": "1",
             }
         )
+
+        inventory_result = subprocess.run(
+            ["ansible-inventory", "--inventory", str(inventory_path), "--list"],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            text=True,
+            env=env,
+            timeout=30,
+            check=False,
+        )
+        try:
+            inventory = json.loads(inventory_result.stdout)
+        except (json.JSONDecodeError, TypeError):
+            inventory = {}
+        if inventory_result.returncode != 0 or "operator" not in inventory.get("_meta", {}).get("hostvars", {}):
+            raise RunError("Ansible inventory is missing the required operator host")
 
         if not run_hidden(["az", "login", "--identity", "--allow-no-subscriptions", "--output", "none"], env):
             raise RunError("Azure managed-identity login failed")
@@ -120,7 +138,12 @@ def main() -> int:
             raise RunError("Could not reach the private AKS API from the operator VM")
 
         result = subprocess.run(
-            ["ansible-playbook", "ansible/playbooks/site.yml"],
+            [
+                "ansible-playbook",
+                "--inventory",
+                str(inventory_path),
+                "ansible/playbooks/site.yml",
+            ],
             cwd=REPO,
             env=env,
             check=False,

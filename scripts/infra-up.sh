@@ -365,7 +365,10 @@ if ! grep -Fq 'CHAT_ANSIBLE_SUCCESS_MARKER' "$run_command_output"; then
   az vm run-command invoke --resource-group "$DEV_RESOURCE_GROUP" --name "chat-dev-operator" --command-id RunShellScript --scripts "$diagnostic_script" --output json || printf 'Could not fetch operator-host diagnostics.\n' >&2
   fail "Ansible success was not confirmed by the VM; temporary roles and running VM are retained"
 fi
-printf 'Ansible success marker received; removing temporary access grants.\n'
+gateway_public_ip_configuration="$(az network public-ip show --resource-group "$DEV_RESOURCE_GROUP" --name "$GATEWAY_PUBLIC_IP_NAME" --query ipConfiguration.id -o tsv)" || fail "Could not verify the Gateway public IP association; temporary access and the running operator VM are retained"
+gateway_public_ip_configuration_lower="${gateway_public_ip_configuration,,}"
+[[ "$gateway_public_ip_configuration_lower" == *"/loadbalancers/kubernetes/"* ]] || fail "Ansible reported success but the Gateway public IP is not attached to the AKS load balancer; temporary access and the running operator VM are retained"
+printf 'Ansible succeeded and the Gateway IP is attached to the AKS load balancer; removing temporary access grants.\n'
 remove_temporary_operator_access
 
 az vm deallocate --resource-group "$DEV_RESOURCE_GROUP" --name "chat-dev-operator" || fail "Temporary roles were removed, but the operator VM could not be deallocated"
