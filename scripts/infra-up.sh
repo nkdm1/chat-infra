@@ -344,6 +344,9 @@ if [[ "$operator_power_state" != "VM running" ]]; then
   az vm start --resource-group "$DEV_RESOURCE_GROUP" --name "chat-dev-operator" || fail "Could not start the operator VM"
 fi
 
+gateway_public_ip="$(az network public-ip show --resource-group "$DEV_RESOURCE_GROUP" --name "$GATEWAY_PUBLIC_IP_NAME" --query ipAddress -o tsv)" || fail "Could not query the Gateway public IP"
+[[ -n "$gateway_public_ip" && "$gateway_public_ip" != "None" ]] || fail "Gateway public IP is not allocated"
+printf '\nCloudflare Gateway A-record target: %s\n' "$gateway_public_ip"
 printf '\nAll infrastructure stacks are ready. Triggering Ansible on the operator VM via Azure Run Command.\n'
 run_command_output="$tmp_dir/operator-run-command.json"
 if ! az vm run-command invoke \
@@ -368,4 +371,4 @@ remove_temporary_operator_access
 az vm deallocate --resource-group "$DEV_RESOURCE_GROUP" --name "chat-dev-operator" || fail "Temporary roles were removed, but the operator VM could not be deallocated"
 operator_power_state="$(az vm show --show-details --resource-group "$DEV_RESOURCE_GROUP" --name "chat-dev-operator" --query powerState -o tsv)" || fail "Could not verify operator VM power state after deallocation"
 [[ "$operator_power_state" == "VM deallocated" ]] || fail "Operator VM did not reach the deallocated state (reported: $operator_power_state)"
-printf 'Temporary operator grants removed and operator VM deallocated. Azure Bastion Developer remains provisioned.\n'
+printf 'Temporary operator grants removed and operator VM deallocated.\n'
