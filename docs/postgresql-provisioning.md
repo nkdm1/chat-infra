@@ -2,13 +2,15 @@
 
 This is a record of the dev setup and a specification for future automation, **not an implemented or tested prod runbook**. There is no `live/prod/` stack yet. Review region, sizing, security, backups, cost, access and data-loss implications before provisioning or changing any environment. Never reuse dev credentials for prod.
 
-## Current Denmark rollout — partially applied
+## Current Denmark rollout — database ready; Redis state recovery pending
 
-The current checkout targets `denmarkeast` for the PostgreSQL VNet/server and the operator VM/Bastion. The new PostgreSQL server name is `chat-dev-cf816eae-dk-pg`; the private DNS zone name remains unchanged. The guarded bring-up now tries B1ms then B2s in Denmark East. B2ms is not listed for Denmark East and is not attempted. Regional SKU listings do not guarantee live capacity or quota.
+The current checkout targets `denmarkeast` for the PostgreSQL VNet/server and operator VM/Bastion. The PostgreSQL server `chat-dev-cf816eae-dk-pg` is Ready on B1ms, availability zone 2. The configuration now pins zone 2: a later plan tried to clear Azure's assigned zone (`2 -> null`), and Azure rejected the update. The guarded bring-up tries B1ms then B2s in Denmark East; B2ms is not listed there and is not attempted. Regional SKU listings do not guarantee live capacity or quota.
 
-The first user-run `infra-up -y` replaced the Sweden VNet with a Denmark East VNet and created the Denmark PostgreSQL DNS link. PostgreSQL server creation then failed because the delegated subnet did not exist. Read-only inspection confirms the Denmark VNet currently has no subnets; its peering on the PostgreSQL VNet side is absent, while the Belgium-side peering is `Initiated`. The Denmark and Belgium private DNS links are both `Completed`. No PostgreSQL server exists. The network Terraform state still lists the subnet/peering resources, so the next network plan must refresh and reconcile this drift before PostgreSQL creation. The network module now marks the subnet and both peerings for replacement when their parent VNet is replaced, to prevent losing them on a future region move.
+After the initial network replacement lost the delegated subnet and PostgreSQL-side peering, a subsequent user-run bring-up restored them. Current read-only inspection shows the Denmark VNet with its PostgreSQL subnet, both VNet peerings `Connected`, and both PostgreSQL private-DNS links `Completed`. The network module now marks the subnet and both peerings for replacement when their parent VNet is replaced, preventing the same issue on future region moves.
 
-The `operator-access` Terraform state is empty, and Azure has no operator VM, Bastion, NIC, or temporary VM role grants to destroy. The only matching operator-vault role assignment is the user's own Key Vault Secrets Officer access on the retained operator vault; it is unrelated and was left untouched. No manual destruction was needed or performed. No plan or apply has been run by the assistant.
+A separate user-run Redis apply created `chat-dev-cf816eae-redis` (Balanced_B0, Belgium Central), now Running. Its state write failed during the Wi-Fi outage. The remote `live/dev/redis` state is still empty (serial 3); the local owner-only `errored.tfstate` snapshot has the same lineage at serial 5 and contains the Redis resource. Preserve that file, do not commit or share it, and do not rerun `infra-up` until Redis state is reconciled. Do not use `-force` or force-unlock without a separate state/lock check.
+
+The `operator-access` Terraform state is empty, and Azure has no operator VM or Bastion yet. The only matching operator-vault role assignment is the user's own Key Vault Secrets Officer access on the retained operator vault; it is unrelated and was left untouched. No state push, plan or apply has been run by the assistant.
 
 ## Historical Sweden deployment
 

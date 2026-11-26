@@ -50,6 +50,12 @@ variable "sku_name" {
   type        = string
 }
 
+variable "zone" {
+  description = "Availability zone for the server; pin the allocated zone to avoid drift."
+  type        = string
+  default     = null
+}
+
 variable "storage_mb" {
   description = "Provisioned server storage in MiB."
   type        = number

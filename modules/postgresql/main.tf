@@ -26,6 +26,7 @@ resource "azurerm_postgresql_flexible_server" "this" {
   name                              = var.name
   resource_group_name               = var.resource_group_name
   location                          = var.location
+  zone                              = var.zone
   version                           = var.postgresql_version
   delegated_subnet_id               = var.delegated_subnet_id
   private_dns_zone_id               = azurerm_private_dns_zone.this.id
