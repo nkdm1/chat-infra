@@ -4,6 +4,7 @@ import io
 import pathlib
 import subprocess
 import sys
+import tempfile
 import unittest
 from unittest import mock
 
@@ -102,6 +103,26 @@ class AdminSecretTests(unittest.TestCase):
 
         self.assertEqual(value, "existing-value")
         request.assert_called_once_with("GET", "token")
+
+    def test_temporary_ip_rule_approval_is_cached_for_wrapper_session(self):
+        completed = subprocess.CompletedProcess([], 0, "", "")
+        with tempfile.TemporaryDirectory() as temp_dir:
+            approval_file = pathlib.Path(temp_dir) / "ip-approved"
+            with (
+                mock.patch.dict("os.environ", {"OPERATOR_VAULT_IP_APPROVAL_FILE": str(approval_file)}),
+                mock.patch.object(MODULE, "get_public_ipv4", return_value="203.0.113.7"),
+                mock.patch.object(MODULE, "get_vault_network_config", return_value=("Enabled", "Deny", [])),
+                mock.patch.object(MODULE, "ask_yes_no", return_value=True) as ask,
+                mock.patch.object(MODULE, "get_access_token", return_value="token"),
+                mock.patch.object(MODULE, "run_az", return_value=completed) as run_az,
+            ):
+                self.assertEqual(MODULE.with_temporary_vault_access(lambda _token: "ok"), "ok")
+                self.assertEqual(MODULE.with_temporary_vault_access(lambda _token: "ok"), "ok")
+
+            ask.assert_called_once()
+            self.assertEqual(run_az.call_count, 4)  # Add/remove still brackets each actual access.
+            self.assertEqual(approval_file.read_text().strip(), "203.0.113.7")
+            self.assertEqual(approval_file.stat().st_mode & 0o777, 0o600)
 
     def test_temporary_ip_rule_decline_does_not_change_firewall(self):
         with (

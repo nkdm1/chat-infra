@@ -110,6 +110,7 @@ run_terragrunt() {
 
 tmp_dir="$(mktemp -d)"
 trap 'rm -rf "$tmp_dir"' EXIT
+export OPERATOR_VAULT_IP_APPROVAL_FILE="$tmp_dir/operator-vault-ip-approved"
 
 confirm_apply() {
   local stack="$1" approval

@@ -85,6 +85,9 @@ load_operator_ssh_public_key || fail "Could not load an approved operator SSH pu
 actual_subscription="$(az account show --query id -o tsv)"
 [[ "$actual_subscription" == "$EXPECTED_SUBSCRIPTION_ID" ]] || fail "Azure CLI is logged into the wrong subscription"
 export ARM_SUBSCRIPTION_ID="$actual_subscription"
+ip_approval_dir="$(mktemp -d)"
+trap 'rm -rf "$ip_approval_dir"' EXIT
+export OPERATOR_VAULT_IP_APPROVAL_FILE="$ip_approval_dir/operator-vault-ip-approved"
 cat <<'EOF'
 This command will destroy dev stacks only. It will not destroy shared services,
 chat-dev-rg, chat-shared-rg, or the Terraform state backend. After the dev app

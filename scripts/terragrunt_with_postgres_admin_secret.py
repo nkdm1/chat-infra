@@ -120,6 +120,32 @@ def is_ip_allowed(ip: str, rules: list[str]) -> bool:
     return False
 
 
+def ip_approval_is_cached(ip: str) -> bool:
+    approval_file = os.environ.get("OPERATOR_VAULT_IP_APPROVAL_FILE")
+    if not approval_file:
+        return False
+    try:
+        with open(approval_file, "r", encoding="utf-8") as stream:
+            return stream.read().strip() == ip
+    except FileNotFoundError:
+        return False
+    except OSError as exc:
+        raise SafeError("Could not read the temporary operator-vault approval cache; stopped") from exc
+
+
+def cache_ip_approval(ip: str) -> None:
+    approval_file = os.environ.get("OPERATOR_VAULT_IP_APPROVAL_FILE")
+    if not approval_file:
+        return
+    try:
+        descriptor = os.open(approval_file, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
+            stream.write(f"{ip}\n")
+        os.chmod(approval_file, 0o600)
+    except OSError as exc:
+        raise SafeError("Could not cache the temporary operator-vault approval; stopped") from exc
+
+
 def get_access_token() -> str:
     result = run_az([
         "account", "get-access-token",
@@ -183,10 +209,12 @@ def with_temporary_vault_access(operation: Callable[[str], str]) -> str:
         raise SafeError("Operator-vault public network access is disabled; cannot use a workstation IP rule")
 
     needs_rule = default_action.lower() == "deny" and not is_ip_allowed(ip, rules)
-    if needs_rule and not ask_yes_no(
-        f"Temporarily allow workstation IP {ip} to access the operator vault?"
-    ):
-        raise SafeError("Temporary operator-vault IP access was declined; stopped")
+    if needs_rule and not ip_approval_is_cached(ip):
+        if not ask_yes_no(
+            f"Temporarily allow workstation IP {ip} to access the operator vault?"
+        ):
+            raise SafeError("Temporary operator-vault IP access was declined; stopped")
+        cache_ip_approval(ip)
 
     added_rule = False
     result_value: str | None = None
