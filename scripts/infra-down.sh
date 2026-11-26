@@ -40,6 +40,17 @@ stacks=(
 
 fail() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
 
+confirm_default_yes() {
+  local prompt="$1" decline_message="$2" answer
+  printf '%s [Y/n] ' "$prompt" >&2
+  IFS= read -r answer || fail "$decline_message"
+  case "$answer" in
+    ""|y|Y|yes|YES|Yes) return 0 ;;
+    n|N|no|NO|No) fail "$decline_message" ;;
+    *) fail "Please answer Y or n; $decline_message" ;;
+  esac
+}
+
 auto_approve=false
 case $# in
   0) ;;
@@ -53,11 +64,11 @@ case $# in
   *) fail "Usage: $0 [-y]" ;;
 esac
 if [[ "$auto_approve" == true ]]; then
-  printf 'WARNING: -y will auto-approve every listed dev destroy. DNS removal and app-vault purge confirmations remain required.\n'
+  printf 'WARNING: -y will auto-approve every listed dev destroy. DNS removal and app-vault purge still require a [Y/n] response; pressing Enter accepts the default yes.\n'
 fi
 
 purge_dev_app_vault_if_deleted() {
-  local deleted_app_vault confirmation remaining
+  local deleted_app_vault remaining
   deleted_app_vault="$(az keyvault list-deleted --subscription "$EXPECTED_SUBSCRIPTION_ID" --query "[?name=='chat-dev-cf816eae-kv'].name | [0]" -o tsv)" || fail "Could not check the app Key Vault soft-delete state"
   if [[ -z "$deleted_app_vault" ]]; then
     printf 'No soft-deleted dev app Key Vault to purge.\n'
@@ -65,9 +76,9 @@ purge_dev_app_vault_if_deleted() {
   fi
 
   printf '\nThe dev app Key Vault is soft-deleted. Purging permanently deletes its secrets.\n'
-  printf "To approve this app-vault-only purge, type exactly 'purge chat-dev-cf816eae-kv': "
-  IFS= read -r confirmation
-  [[ "$confirmation" == "purge chat-dev-cf816eae-kv" ]] || fail "App Key Vault purge was not approved; stopped"
+  confirm_default_yes \
+    "Permanently purge chat-dev-cf816eae-kv and its secrets?" \
+    "App Key Vault purge was not approved; stopped"
   az keyvault purge \
     --name chat-dev-cf816eae-kv \
     --location belgiumcentral \
@@ -92,12 +103,12 @@ cat <<'EOF'
 This command will destroy dev stacks only. It will not destroy shared services,
 chat-dev-rg, chat-shared-rg, or the Terraform state backend. After the dev app
 Key Vault stack is destroyed, the script can permanently purge its soft-deleted
-vault after a separate typed confirmation. The operator vault is never purged.
+vault after a separate Y/n confirmation. The operator vault is never purged.
 Before continuing, remove or verify absence of the Cloudflare `chat` DNS record.
 EOF
-printf "After that manual DNS check, type exactly 'dns-removed' to continue: "
-IFS= read -r dns_confirmation
-[[ "$dns_confirmation" == "dns-removed" ]] || fail "DNS removal was not confirmed; stopped"
+confirm_default_yes \
+  "Have you removed or verified absence of the Cloudflare chat DNS record?" \
+  "DNS removal was not confirmed; stopped"
 
 run_terragrunt() {
   local stack="$1" action
@@ -139,9 +150,9 @@ for stack in "${stacks[@]}"; do
   if [[ "$auto_approve" == true ]]; then
     printf 'Auto-approving the destroy plan for %s due to -y.\n' "$stack"
   else
-    printf "Review the destroy plan above. To approve this stack, type exactly: destroy %s\n> " "$stack"
-    IFS= read -r approval
-    [[ "$approval" == "destroy $stack" ]] || fail "Destroy approval not received for $stack; stopped"
+    confirm_default_yes \
+      "Review the plan above. Destroy resources in $stack?" \
+      "Destroy approval not received for $stack; stopped"
   fi
   (cd "$stack_dir" && run_terragrunt "$stack" destroy)
   if [[ "$stack" == "live/dev/key-vault" ]]; then
