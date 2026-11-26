@@ -19,6 +19,7 @@ dependency "postgresql_network" {
 }
 
 inputs = {
+  enable_bastion          = false
   name                    = "chat-${local.env}-operator"
   resource_group_name     = dependency.resource_group.outputs.name
   location                = "denmarkeast"

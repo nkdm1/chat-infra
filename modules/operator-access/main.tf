@@ -93,6 +93,7 @@ resource "azurerm_linux_virtual_machine" "operator" {
 }
 
 resource "azurerm_bastion_host" "developer" {
+  count               = var.enable_bastion ? 1 : 0
   name                = "${var.name}-bastion"
   location            = var.location
   resource_group_name = var.resource_group_name

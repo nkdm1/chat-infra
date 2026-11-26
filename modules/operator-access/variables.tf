@@ -49,6 +49,12 @@ variable "env" {
   type = string
 }
 
+variable "enable_bastion" {
+  description = "Whether to provision Bastion for interactive operator access."
+  type        = bool
+  default     = true
+}
+
 variable "tags" {
   type    = map(string)
   default = {}

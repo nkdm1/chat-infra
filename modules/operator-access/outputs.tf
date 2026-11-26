@@ -7,7 +7,7 @@ output "virtual_machine_name" {
 }
 
 output "bastion_name" {
-  value = azurerm_bastion_host.developer.name
+  value = try(azurerm_bastion_host.developer[0].name, null)
 }
 
 output "principal_id" {
