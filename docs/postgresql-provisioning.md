@@ -2,15 +2,15 @@
 
 This is a record of the dev setup and a specification for future automation, **not an implemented or tested prod runbook**. There is no `live/prod/` stack yet. Review region, sizing, security, backups, cost, access and data-loss implications before provisioning or changing any environment. Never reuse dev credentials for prod.
 
-## Current Denmark rollout — database ready; Redis state recovery pending
+## Current Denmark rollout — database ready; Redis state recovered
 
 The current checkout targets `denmarkeast` for the PostgreSQL VNet/server and operator VM/Bastion. The PostgreSQL server `chat-dev-cf816eae-dk-pg` is Ready on B1ms, availability zone 2. The configuration now pins zone 2: a later plan tried to clear Azure's assigned zone (`2 -> null`), and Azure rejected the update. The guarded bring-up tries B1ms then B2s in Denmark East; B2ms is not listed there and is not attempted. Regional SKU listings do not guarantee live capacity or quota.
 
 After the initial network replacement lost the delegated subnet and PostgreSQL-side peering, a subsequent user-run bring-up restored them. Current read-only inspection shows the Denmark VNet with its PostgreSQL subnet, both VNet peerings `Connected`, and both PostgreSQL private-DNS links `Completed`. The network module now marks the subnet and both peerings for replacement when their parent VNet is replaced, preventing the same issue on future region moves.
 
-A separate user-run Redis apply created `chat-dev-cf816eae-redis` (Balanced_B0, Belgium Central), now Running. Its state write failed during the Wi-Fi outage. The remote `live/dev/redis` state is still empty (serial 3); the local owner-only `errored.tfstate` snapshot has the same lineage at serial 5 and contains the Redis resource. Preserve that file, do not commit or share it, and do not rerun `infra-up` until Redis state is reconciled. Do not use `-force` or force-unlock without a separate state/lock check.
+A separate user-run Redis apply created `chat-dev-cf816eae-redis` (Balanced_B0, Belgium Central), now Running. Its state write failed during the Wi-Fi outage. After explicit authorization, the stale lock was cleared and the local owner-only `errored.tfstate` snapshot was pushed without `-force`; the remote state now contains `azurerm_managed_redis.this` (serial 6), and the blob lease is unlocked. The local snapshot remains in the Terragrunt cache; do not commit or share it. The next Redis plan should refresh the existing resource rather than create it again.
 
-The `operator-access` Terraform state is empty, and Azure has no operator VM or Bastion yet. The only matching operator-vault role assignment is the user's own Key Vault Secrets Officer access on the retained operator vault; it is unrelated and was left untouched. No state push, plan or apply has been run by the assistant.
+The `operator-access` Terraform state is empty, and Azure has no operator VM or Bastion yet. The only matching operator-vault role assignment is the user's own Key Vault Secrets Officer access on the retained operator vault; it is unrelated and was left untouched. The assistant performed the explicitly authorized Redis state recovery only; no infrastructure plan or apply has been run.
 
 ## Historical Sweden deployment
 

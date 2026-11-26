@@ -4,7 +4,7 @@
 >
 > **Operating target:** roughly two months of intermittent use, not 24/7 hosting. Most resources can be destroyed between uses; dev and prod data can be regenerated for demonstrations if retention costs too much. After preflight and explicit approval, measure a bounded 24-hour trial. Total project spend must stay below the hard **$100 USD credit ceiling**.
 >
-> **Current bring-up status:** Denmark PostgreSQL VNet, delegated subnet, both connected peerings, and private-DNS links are present. PostgreSQL `chat-dev-cf816eae-dk-pg` is Ready in zone 2; configuration now pins that zone. Redis Enterprise is Running, but the remote Terraform state is empty after an interrupted state write; preserve and reconcile the owner-only local `errored.tfstate` before another `infra-up`. The operator VM/Bastion have not yet been created. Older Sweden notes below are historical unless explicitly stated otherwise.
+> **Current bring-up status:** Denmark PostgreSQL VNet, delegated subnet, both connected peerings, and private-DNS links are present. PostgreSQL `chat-dev-cf816eae-dk-pg` is Ready in zone 2; configuration now pins that zone. Redis Enterprise is Running and its remote Terraform state was recovered from the owner-only local snapshot after the interrupted write; keep that snapshot out of Git and review the next Redis plan. The operator VM/Bastion have not yet been created. Older Sweden notes below are historical unless explicitly stated otherwise.
 
 ## Current state
 
