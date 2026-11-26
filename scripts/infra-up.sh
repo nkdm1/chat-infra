@@ -44,6 +44,8 @@ for tool in az terragrunt git python3 base64; do
   command -v "$tool" >/dev/null 2>&1 || fail "Required tool not found: $tool"
 done
 [[ -d "$ROOT/live" && -d "$ROOT/modules" ]] || fail "Run this script from a valid infra checkout"
+source "$ROOT/scripts/lib/load-operator-ssh-key.sh"
+load_operator_ssh_public_key || fail "Could not load an approved operator SSH public key"
 [[ "$(git -C "$ROOT" remote get-url origin)" == *"github.com:nkdm1/chat-infra.git"* || "$(git -C "$ROOT" remote get-url origin)" == "$PUBLIC_REPO" ]] || fail "Unexpected origin remote"
 
 actual_subscription="$(az account show --query id -o tsv)"
@@ -55,8 +57,6 @@ deleted_app_vault="$(az keyvault list-deleted --query "[?name=='chat-dev-cf816ea
 
 [[ -n "${POSTGRESQL_SKU:-}" ]] || fail "Set POSTGRESQL_SKU to a reviewed, currently available SKU"
 export POSTGRESQL_SKU
-[[ -n "${OPERATOR_SSH_PUBLIC_KEY:-}" ]] || fail "Load the approved operator SSH public key into OPERATOR_SSH_PUBLIC_KEY"
-export OPERATOR_SSH_PUBLIC_KEY
 [[ -n "${TF_VAR_administrator_password:-}" ]] || fail "Load TF_VAR_administrator_password through the approved secret-safe process"
 
 # The VM must fetch playbooks from public main. Stop before any apply if local

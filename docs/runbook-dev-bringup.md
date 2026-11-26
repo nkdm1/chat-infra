@@ -29,7 +29,7 @@ This document separates **what is automated by checked-in code** from **operator
 
 1. Reconfirm the subscription and Azure for Students policy. Historical subscription: `cf816eae-f4d9-4db4-bfa6-bda71e2cbf68`; tenant: `d0da435b-a7e7-4d74-a4ae-f72cf8f3b2db`. These IDs are identifiers, not credentials.
 2. Confirm you are in the infra repository on the intended branch, and that no untracked secret files will be added or committed.
-3. For `scripts/infra-up.sh`, confirm `az`, Terragrunt, Git and Python are installed on the workstation. OpenTofu/Helm/kubectl/Ansible are installed by Terragrunt/cloud-init for their respective host. For the manual fallback commands, install Helm and kubectl on the machine that can reach the private API.
+3. For `scripts/infra-up.sh`, confirm `az`, Terragrunt, Git and Python are installed on the workstation. The wrapper prompts to use `~/.ssh/chat-operator.pub` and sets `OPERATOR_SSH_PUBLIC_KEY` itself; answering no selects an alternate public-key file. A missing/unreadable default or selected file aborts. OpenTofu/Helm/kubectl/Ansible are installed by Terragrunt/cloud-init for their respective host. For the manual fallback commands, install Helm and kubectl on the machine that can reach the private API.
 4. Set the subscription explicitly for each shell session:
 
    ```bash
@@ -46,7 +46,7 @@ This document separates **what is automated by checked-in code** from **operator
 
 ## 3. Infrastructure stacks (ordered; guarded wrapper or manual)
 
-Run each command from the infra repository root. The environment variables are shown in separate commands so their purpose is visible. The PostgreSQL administrator password must be entered through the approved secret-safe process; **do not paste a literal password into an `export` command**. The historical provider supports the ephemeral `TF_VAR_administrator_password` input and write-only AzureRM field, but confirm the checked-in module still does before use.
+Run each command from the infra repository root. The environment variables are shown in separate commands so their purpose is visible. The PostgreSQL administrator password must be supplied through an approved secret-safe process; **do not paste a literal password into an `export` command**. The guarded wrappers set `OPERATOR_SSH_PUBLIC_KEY` from the selected public-key file. The current PostgreSQL module expects the ephemeral `TF_VAR_administrator_password` input and AzureRM write-only field; the operator VM also retrieves this password from the operator vault later to configure the application login.
 
 Example pattern for **each** stack:
 

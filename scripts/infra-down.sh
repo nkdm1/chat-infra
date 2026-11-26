@@ -6,6 +6,7 @@ umask 077
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 EXPECTED_SUBSCRIPTION_ID="cf816eae-f4d9-4db4-bfa6-bda71e2cbf68"
+source "$ROOT/scripts/lib/load-operator-ssh-key.sh"
 
 # Temporary grants and federation must be removed while their dependencies exist.
 # Workload federation is deliberately destroyed before AKS to avoid stale state.
@@ -57,14 +58,13 @@ purge_dev_app_vault_if_deleted() {
 
 command -v az >/dev/null 2>&1 || fail "Required tool not found: az"
 command -v terragrunt >/dev/null 2>&1 || fail "Required tool not found: terragrunt"
+load_operator_ssh_public_key || fail "Could not load an approved operator SSH public key"
 
 actual_subscription="$(az account show --query id -o tsv)"
 [[ "$actual_subscription" == "$EXPECTED_SUBSCRIPTION_ID" ]] || fail "Azure CLI is logged into the wrong subscription"
 export ARM_SUBSCRIPTION_ID="$actual_subscription"
 [[ -n "${POSTGRESQL_SKU:-}" ]] || fail "Set POSTGRESQL_SKU to the configured, reviewed server SKU"
 export POSTGRESQL_SKU
-[[ -n "${OPERATOR_SSH_PUBLIC_KEY:-}" ]] || fail "Load the approved operator SSH public key into OPERATOR_SSH_PUBLIC_KEY"
-export OPERATOR_SSH_PUBLIC_KEY
 [[ -n "${TF_VAR_administrator_password:-}" ]] || fail "Load TF_VAR_administrator_password through the approved secret-safe process"
 
 cat <<'EOF'
