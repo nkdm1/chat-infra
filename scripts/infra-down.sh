@@ -4,6 +4,10 @@
 set -euo pipefail
 set +x
 umask 077
+if [[ -t 1 ]]; then
+  export FORCE_COLOR=1 CLICOLOR_FORCE=1
+  export TERM="${TERM:-xterm-256color}"
+fi
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 EXPECTED_SUBSCRIPTION_ID="cf816eae-f4d9-4db4-bfa6-bda71e2cbf68"
@@ -91,7 +95,7 @@ for stack in "${stacks[@]}"; do
   [[ -f "$stack_dir/terragrunt.hcl" ]] || fail "Missing stack configuration: $stack"
   printf '\n========== Terragrunt destroy plan: %s ==========\n' "$stack"
   plan_output="$(mktemp)"
-  if ! (cd "$stack_dir" && run_terragrunt "$stack" plan -destroy -no-color) 2>&1 | tee "$plan_output"; then
+  if ! (cd "$stack_dir" && run_terragrunt "$stack" plan -destroy) 2>&1 | tee "$plan_output"; then
     rm -f "$plan_output"
     fail "Destroy plan failed for $stack; stopped without destroying this stack"
   fi

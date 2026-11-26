@@ -4,6 +4,10 @@
 set -euo pipefail
 set +x
 umask 077
+if [[ -t 1 ]]; then
+  export FORCE_COLOR=1 CLICOLOR_FORCE=1
+  export TERM="${TERM:-xterm-256color}"
+fi
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 EXPECTED_SUBSCRIPTION_ID="cf816eae-f4d9-4db4-bfa6-bda71e2cbf68"
@@ -77,25 +81,41 @@ run_terragrunt() {
   fi
 }
 
+tmp_dir="$(mktemp -d)"
+trap 'rm -rf "$tmp_dir"' EXIT
+
+confirm_apply() {
+  local stack="$1" approval
+  [[ -t 0 ]] || fail "Apply approval for $stack requires an interactive terminal"
+  while true; do
+    printf 'Apply the reviewed plan for %s? [Y/n] ' "$stack"
+    IFS= read -r approval || fail "No approval input received for $stack; stopped"
+    case "$approval" in
+      ""|Y|y|yes|YES|Yes) return 0 ;;
+      N|n|NO|no|No) fail "Apply declined for $stack; stopped" ;;
+      *) printf 'Please answer Y or n.\n' ;;
+    esac
+  done
+}
+
 for stack in "${stacks[@]}"; do
   stack_dir="$ROOT/$stack"
   [[ -f "$stack_dir/terragrunt.hcl" ]] || fail "Missing stack configuration: $stack"
   printf '\n========== Terragrunt plan: %s ==========\n' "$stack"
-  plan_output="$(mktemp)"
-  if ! (cd "$stack_dir" && run_terragrunt ensure "$stack" plan -no-color) 2>&1 | tee "$plan_output"; then
-    rm -f "$plan_output"
+  plan_output="$tmp_dir/plan-output"
+  plan_file="$tmp_dir/${stack//\//_}.tfplan"
+  if ! (cd "$stack_dir" && run_terragrunt ensure "$stack" plan "-out=$plan_file") 2>&1 | tee "$plan_output"; then
     fail "Plan failed for $stack; stopped without applying this stack"
   fi
   if grep -Eq 'No changes\.' "$plan_output"; then
     printf 'No changes for %s; skipping apply.\n' "$stack"
-    rm -f "$plan_output"
+    rm -f "$plan_file"
     continue
   fi
-  rm -f "$plan_output"
-  printf "Review the plan above. To approve this stack, type exactly: apply %s\n> " "$stack"
-  IFS= read -r approval
-  [[ "$approval" == "apply $stack" ]] || fail "Approval not received for $stack; stopped"
-  (cd "$stack_dir" && run_terragrunt read "$stack" apply)
+  printf 'The reviewed binary plan is stored temporarily with owner-only permissions.\n'
+  confirm_apply "$stack"
+  (cd "$stack_dir" && run_terragrunt read "$stack" apply "$plan_file")
+  rm -f "$plan_file"
 done
 
 # Read only non-secret Terraform outputs for the VM's Ansible configuration.
@@ -125,8 +145,6 @@ export OPERATOR_KEY_VAULT_NAME="chat-ops-cf816eae-kv"
 CHAT_VALUES_YAML="$(python3 "$ROOT/scripts/render_dev_values.py")" || fail "Could not render non-secret Helm values"
 [[ -n "$REDIS_ENTERPRISE_NAME" && "$REDIS_ENTERPRISE_NAME" != "$redis_id" ]] || fail "Could not parse Redis resource name"
 
-tmp_dir="$(mktemp -d)"
-trap 'rm -rf "$tmp_dir"' EXIT
 config_file="$tmp_dir/operator-config.json"
 remote_script="$tmp_dir/remote-run-ansible.sh"
 python3 - "$config_file" <<'PY'

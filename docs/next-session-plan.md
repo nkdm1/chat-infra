@@ -5,7 +5,7 @@
 - Kept: Web PubSub Free, email/ACS, `websecchatacr`, Cosmos account (no data), operator vault `chat-ops-cf816eae-kv`, `chat-dev-rg`, `chat-shared-rg`, Terraform state backend.
 - One leftover Terraform state entry: `live/dev/workload-federation` (no cost; cannot be read without the deleted AKS outputs).
 - Runbook for rebuild: `docs/runbook-dev-bringup.md`. Non-secret chart values: `deploy/environments/dev/chat-values.yaml`.
-- 2026-11-27 update: the user pushed commit `320e79a` to public `origin/main`; `origin/main` now also contains the approved app-vault teardown-purge change. The soft-deleted dev app vault was purged after explicit user approval. The SSH-key loader (`0ff361e`) and the new admin-secret workflow are local/unpublished. No infrastructure provisioning has started. The requested default `~/.ssh/chat-operator.pub` file is currently absent, so the wrapper will abort until it exists.
+- 2026-11-27 update: the user pushed commit `320e79a` to public `origin/main`; `origin/main` now also contains the approved app-vault teardown-purge change. The soft-deleted dev app vault was purged after explicit user approval. The SSH-key loader (`0ff361e`) and admin-secret workflow are local/unpublished. The user has since created the default key and started `infra-up.sh`; current execution output/resource state has not been reported. Changes to coloring/approval behavior are local and affect only a future invocation. Check Azure/Terraform state before rerunning.
 
 ## 1. Cost monitoring (ongoing)
 - Latest Cost Analysis shows €3.10 actual cost; this is acceptable. Continue monitoring for the next 24 hours, then review again for delayed charges.
