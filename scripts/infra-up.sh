@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Provision dev infrastructure locally, then trigger VM-local Ansible via Azure Run Command.
-# No apply uses -auto-approve; each changing stack needs explicit local approval.
+# By default each changing stack is reviewed and approved individually; -y opts into auto-approving all up-stack applies.
 set -euo pipefail
 set +x
 umask 077
@@ -45,6 +45,22 @@ stacks=(
 
 fail() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
 
+auto_approve=false
+case $# in
+  0) ;;
+  1)
+    case "$1" in
+      -y) auto_approve=true ;;
+      -h|--help) printf 'Usage: %s [-y]\n' "$0"; exit 0 ;;
+      *) fail "Usage: $0 [-y]" ;;
+    esac
+    ;;
+  *) fail "Usage: $0 [-y]" ;;
+esac
+if [[ "$auto_approve" == true ]]; then
+  printf 'WARNING: -y will auto-approve every changing listed up-stack, including shared stacks. Plans remain visible, but per-stack review prompts are skipped.\n'
+fi
+
 for tool in az terragrunt git python3 base64; do
   command -v "$tool" >/dev/null 2>&1 || fail "Required tool not found: $tool"
 done
@@ -72,8 +88,17 @@ if [[ -n "$(git -C "$ROOT" status --porcelain -- "${relevant_paths[@]}")" ]]; th
 fi
 
 run_terragrunt() {
-  local mode="$1" stack="$2"
+  local mode="$1" stack="$2" action
   shift 2
+  if [[ "$auto_approve" == true ]]; then
+    case "${1:-}" in
+      apply|destroy)
+        action="$1"
+        shift
+        set -- "$action" -auto-approve "$@"
+        ;;
+    esac
+  fi
   if [[ "$stack" == "live/dev/postgresql" ]]; then
     python3 "$ROOT/scripts/terragrunt_with_postgres_admin_secret.py" --mode "$mode" -- terragrunt "$@"
   else
@@ -113,7 +138,11 @@ for stack in "${stacks[@]}"; do
     continue
   fi
   printf 'The reviewed binary plan is stored temporarily with owner-only permissions.\n'
-  confirm_apply "$stack"
+  if [[ "$auto_approve" == true ]]; then
+    printf 'Auto-approving the saved plan for %s due to -y.\n' "$stack"
+  else
+    confirm_apply "$stack"
+  fi
   (cd "$stack_dir" && run_terragrunt read "$stack" apply "$plan_file")
   rm -f "$plan_file"
 done

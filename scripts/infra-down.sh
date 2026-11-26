@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Destroy only the dev stacks listed in docs/teardown-plan.md.
-# Every changing destroy requires a reviewed plan and explicit local approval.
+# By default every changing destroy is reviewed and individually approved; -y opts into auto-approving the listed dev destroys.
 set -euo pipefail
 set +x
 umask 077
@@ -39,6 +39,22 @@ stacks=(
 )
 
 fail() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
+
+auto_approve=false
+case $# in
+  0) ;;
+  1)
+    case "$1" in
+      -y) auto_approve=true ;;
+      -h|--help) printf 'Usage: %s [-y]\n' "$0"; exit 0 ;;
+      *) fail "Usage: $0 [-y]" ;;
+    esac
+    ;;
+  *) fail "Usage: $0 [-y]" ;;
+esac
+if [[ "$auto_approve" == true ]]; then
+  printf 'WARNING: -y will auto-approve every listed dev destroy. DNS removal and app-vault purge confirmations remain required.\n'
+fi
 
 purge_dev_app_vault_if_deleted() {
   local deleted_app_vault confirmation remaining
@@ -81,8 +97,17 @@ IFS= read -r dns_confirmation
 [[ "$dns_confirmation" == "dns-removed" ]] || fail "DNS removal was not confirmed; stopped"
 
 run_terragrunt() {
-  local stack="$1"
+  local stack="$1" action
   shift
+  if [[ "$auto_approve" == true ]]; then
+    case "${1:-}" in
+      apply|destroy)
+        action="$1"
+        shift
+        set -- "$action" -auto-approve "$@"
+        ;;
+    esac
+  fi
   if [[ "$stack" == "live/dev/postgresql" ]]; then
     python3 "$ROOT/scripts/terragrunt_with_postgres_admin_secret.py" --mode read -- terragrunt "$@"
   else
@@ -108,9 +133,13 @@ for stack in "${stacks[@]}"; do
     continue
   fi
   rm -f "$plan_output"
-  printf "Review the destroy plan above. To approve this stack, type exactly: destroy %s\n> " "$stack"
-  IFS= read -r approval
-  [[ "$approval" == "destroy $stack" ]] || fail "Destroy approval not received for $stack; stopped"
+  if [[ "$auto_approve" == true ]]; then
+    printf 'Auto-approving the destroy plan for %s due to -y.\n' "$stack"
+  else
+    printf "Review the destroy plan above. To approve this stack, type exactly: destroy %s\n> " "$stack"
+    IFS= read -r approval
+    [[ "$approval" == "destroy $stack" ]] || fail "Destroy approval not received for $stack; stopped"
+  fi
   (cd "$stack_dir" && run_terragrunt "$stack" destroy)
   if [[ "$stack" == "live/dev/key-vault" ]]; then
     purge_dev_app_vault_if_deleted
