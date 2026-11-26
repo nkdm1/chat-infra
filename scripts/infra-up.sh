@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Provision dev infrastructure locally, then trigger VM-local Ansible via Azure Run Command.
-# By default each changing stack is reviewed and approved individually; -y auto-approves up-stack changes and temporary-role cleanup.
+# By default each changing stack is reviewed and approved individually; -y runs non-interactively using the default public key and accepting default-yes confirmations.
 set -euo pipefail
 set +x
 umask 077
@@ -60,7 +60,8 @@ case $# in
   *) fail "Usage: $0 [-y]" ;;
 esac
 if [[ "$auto_approve" == true ]]; then
-  printf 'WARNING: -y auto-approves every changing listed up-stack (including shared stacks), PostgreSQL SKU fallbacks, and temporary-role cleanup. Plans remain visible, but review prompts are skipped; fallback SKUs may cost more or have different performance.\n'
+  export TF_INPUT=0 TF_IN_AUTOMATION=1 INFRA_AUTO_APPROVE=true
+  printf 'WARNING: -y is fully non-interactive: it uses the default operator public key, accepts the temporary workstation-IP rule and other default-yes confirmations, auto-approves every changing listed up-stack (including shared stacks), PostgreSQL SKU fallbacks, and temporary-role cleanup. Plans remain visible; fallback SKUs may cost more or have different performance.\n'
 fi
 
 for tool in az terragrunt git python3 base64; do
@@ -68,7 +69,7 @@ for tool in az terragrunt git python3 base64; do
 done
 [[ -d "$ROOT/live" && -d "$ROOT/modules" ]] || fail "Run this script from a valid infra checkout"
 source "$ROOT/scripts/lib/load-operator-ssh-key.sh"
-load_operator_ssh_public_key || fail "Could not load an approved operator SSH public key"
+load_operator_ssh_public_key "$auto_approve" || fail "Could not load an approved operator SSH public key"
 [[ "$(git -C "$ROOT" remote get-url origin)" == *"github.com:nkdm1/chat-infra.git"* || "$(git -C "$ROOT" remote get-url origin)" == "$PUBLIC_REPO" ]] || fail "Unexpected origin remote"
 
 actual_subscription="$(az account show --query id -o tsv)"
@@ -111,6 +112,7 @@ run_terragrunt() {
 tmp_dir="$(mktemp -d)"
 trap 'rm -rf "$tmp_dir"' EXIT
 export OPERATOR_VAULT_IP_APPROVAL_FILE="$tmp_dir/operator-vault-ip-approved"
+export INFRA_AUTO_APPROVE="$auto_approve"
 
 confirm_apply() {
   local stack="$1" approval

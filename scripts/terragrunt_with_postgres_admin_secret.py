@@ -49,6 +49,9 @@ def run_az(args: list[str]) -> subprocess.CompletedProcess[str]:
 
 
 def ask_yes_no(prompt: str) -> bool:
+    if os.environ.get("INFRA_AUTO_APPROVE", "").strip().lower() in {"1", "true", "yes"}:
+        print(f"Auto-accepted default-yes confirmation due to -y: {prompt}", file=sys.stderr, flush=True)
+        return True
     while True:
         print(f"{prompt} [Y/n] ", end="", file=sys.stderr, flush=True)
         try:

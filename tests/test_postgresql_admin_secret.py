@@ -25,6 +25,15 @@ class AdminSecretTests(unittest.TestCase):
             self.assertTrue(MODULE.ask_yes_no("Proceed?"))
         self.assertIn("[Y/n]", stderr.getvalue())
 
+    def test_yes_no_prompt_accepts_default_yes_non_interactively(self):
+        with (
+            mock.patch.dict("os.environ", {"INFRA_AUTO_APPROVE": "true"}),
+            mock.patch("builtins.input", side_effect=AssertionError("must not prompt")),
+            contextlib.redirect_stderr(io.StringIO()) as stderr,
+        ):
+            self.assertTrue(MODULE.ask_yes_no("Proceed?"))
+        self.assertIn("due to -y", stderr.getvalue())
+
     def test_yes_no_prompt_accepts_no(self):
         with (
             mock.patch("builtins.input", return_value="n"),
@@ -66,6 +75,19 @@ class AdminSecretTests(unittest.TestCase):
         self.assertEqual(request.call_args_list[0].args, ("GET", "token"))
         self.assertEqual(request.call_args_list[1].args, ("PUT", "token", value))
         self.assertNotIn(value, stderr.getvalue())
+
+    def test_new_server_stages_secret_non_interactively_with_auto_approve(self):
+        with (
+            mock.patch.dict("os.environ", {"INFRA_AUTO_APPROVE": "true"}),
+            mock.patch.object(MODULE, "postgres_server_exists", return_value=False),
+            mock.patch.object(MODULE, "with_temporary_vault_access", side_effect=lambda operation: operation("token")),
+            mock.patch.object(MODULE, "key_vault_request", side_effect=[MODULE.SecretNotFound("missing"), None]) as request,
+            contextlib.redirect_stderr(io.StringIO()),
+        ):
+            value = MODULE.ensure_secret("chat-dev-rg", "chat-dev-cf816eae-dk-pg")
+
+        self.assertRegex(value, r"^[A-Za-z0-9_-]{48}$")
+        self.assertEqual(request.call_args_list[1].args, ("PUT", "token", value))
 
     def test_new_server_decline_does_not_write_secret(self):
         with (
@@ -123,6 +145,23 @@ class AdminSecretTests(unittest.TestCase):
             self.assertEqual(run_az.call_count, 4)  # Add/remove still brackets each actual access.
             self.assertEqual(approval_file.read_text().strip(), "203.0.113.7")
             self.assertEqual(approval_file.stat().st_mode & 0o777, 0o600)
+
+    def test_temporary_ip_rule_is_accepted_non_interactively_with_auto_approve(self):
+        completed = subprocess.CompletedProcess([], 0, "", "")
+        with (
+            mock.patch.dict("os.environ", {"INFRA_AUTO_APPROVE": "true"}),
+            mock.patch.object(MODULE, "get_public_ipv4", return_value="203.0.113.7"),
+            mock.patch.object(MODULE, "get_vault_network_config", return_value=("Enabled", "Deny", [])),
+            mock.patch("builtins.input", side_effect=AssertionError("must not prompt")),
+            mock.patch.object(MODULE, "get_access_token", return_value="token"),
+            mock.patch.object(MODULE, "run_az", return_value=completed) as run_az,
+        ):
+            result = MODULE.with_temporary_vault_access(lambda _token: "ok")
+
+        self.assertEqual(result, "ok")
+        self.assertEqual(run_az.call_count, 2)
+        self.assertIn("add", run_az.call_args_list[0].args[0])
+        self.assertIn("remove", run_az.call_args_list[1].args[0])
 
     def test_temporary_ip_rule_decline_does_not_change_firewall(self):
         with (
