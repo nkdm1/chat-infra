@@ -38,15 +38,21 @@ runcmd:
     echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/microsoft.gpg] https://packages.microsoft.com/repos/azure-cli/ ${VERSION_CODENAME} main" \
       > /etc/apt/sources.list.d/azure-cli.list
 
-    curl --fail --show-error --location --retry 5 --retry-all-errors --retry-delay 2 \
-      --connect-timeout 20 --max-time 120 \
-      --output "$tmpdir/helm-signing.asc" https://baltocdn.com/helm/signing.asc
-    gpg --dearmor --yes -o /usr/share/keyrings/helm.gpg "$tmpdir/helm-signing.asc"
-    chmod 0644 /usr/share/keyrings/helm.gpg
-    echo "deb [arch=amd64 signed-by=/usr/share/keyrings/helm.gpg] https://baltocdn.com/helm/stable/debian/ all main" \
-      > /etc/apt/sources.list.d/helm-stable-debian.list
-
     apt-get update
-    DEBIAN_FRONTEND=noninteractive apt-get install -y azure-cli helm
+    DEBIAN_FRONTEND=noninteractive apt-get install -y azure-cli
+
+    # Install a pinned official Helm release and verify its published checksum.
+    helm_version=v3.22.1
+    helm_archive="helm-${helm_version}-linux-amd64.tar.gz"
+    curl --fail --show-error --location --retry 5 --retry-all-errors --retry-delay 2 \
+      --connect-timeout 20 --max-time 180 \
+      --output "$tmpdir/$helm_archive" "https://get.helm.sh/$helm_archive"
+    curl --fail --show-error --location --retry 5 --retry-all-errors --retry-delay 2 \
+      --connect-timeout 20 --max-time 60 \
+      --output "$tmpdir/$helm_archive.sha256sum" "https://get.helm.sh/$helm_archive.sha256sum"
+    (cd "$tmpdir" && sha256sum -c "$helm_archive.sha256sum")
+    tar -xzf "$tmpdir/$helm_archive" -C "$tmpdir"
+    install -m 0755 "$tmpdir/linux-amd64/helm" /usr/local/bin/helm
+
     az aks install-cli --only-show-errors
     git clone --depth 1 --branch main https://github.com/nkdm1/chat-infra.git /opt/chat-infra
