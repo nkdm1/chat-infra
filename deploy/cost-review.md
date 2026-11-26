@@ -34,7 +34,7 @@ For the user's shortlisted nodes, observed Linux retail prices per VM-hour were:
 
 ### Belgium Central and Sweden Central — selected configuration
 
-Public retail lookup reported $0.115/hour for one Linux `Standard_D2s_v4` VM in Belgium Central. This is compute only, not a subscription quote or proof that AKS can allocate it. Web PubSub and PostgreSQL are configured in Sweden Central, with PostgreSQL connected to Belgium over inter-region VNet peering. Web PubSub Free-tier behavior, PostgreSQL capacity, inter-region peering/data-transfer charges and application latency remain unverified. Other Belgium/Sweden trial rates still need review, and billing can continue for retained resources after AKS is removed.
+Public retail lookup reported $0.115/hour for one Linux `Standard_D2s_v4` VM in Belgium Central. This is compute only, not a subscription quote or proof that AKS can allocate it. Web PubSub and PostgreSQL are configured in Sweden Central, with PostgreSQL connected to Belgium over inter-region VNet peering. PostgreSQL creation now has B1ms → B2s → B2ats_v2 capacity fallbacks; prices for B2s/B2ats_v2 and their actual availability still need review. Microsoft lists B2ats_v2 at 2 vCores/1 GiB, so performance may differ substantially from B1ms. The operator VM is planned to be deallocated only after confirmed Ansible success; its disk and other retained resources may still incur charges. Azure Bastion Developer is listed as free, and remains provisioned. Web PubSub Free-tier behavior, PostgreSQL capacity, inter-region peering/data-transfer charges and application latency remain unverified. Other Belgium/Sweden trial rates still need review, and billing can continue for retained resources after AKS is removed.
 
 ## Required inputs and line items
 

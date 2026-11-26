@@ -18,3 +18,4 @@ if [[ ! -f scripts/operator-run-ansible.py || ! -f ansible/playbooks/site.yml ]]
 fi
 
 printf '%s' '__CONFIG_B64__' | base64 --decode | python3 scripts/operator-run-ansible.py
+printf '\nCHAT_ANSIBLE_SUCCESS_MARKER\n'

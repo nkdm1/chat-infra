@@ -34,6 +34,10 @@ class SafeError(Exception):
     """An error whose message is safe to show to the operator."""
 
 
+class SecretNotFound(SafeError):
+    """The named operator-vault secret does not yet exist."""
+
+
 def run_az(args: list[str]) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         ["az", *args],
@@ -162,7 +166,7 @@ def key_vault_request(method: str, token: str, value: str | None = None) -> str 
                 time.sleep(2)
                 continue
             if exc.code == 404 and method == "GET":
-                raise SafeError("The PostgreSQL admin secret is missing from the operator vault; stopped") from exc
+                raise SecretNotFound("The PostgreSQL admin secret is missing from the operator vault") from exc
             raise SafeError(f"Key Vault {method} failed with HTTP {exc.code}; stopped") from exc
         except urllib.error.URLError as exc:
             if attempt < 29:
@@ -243,23 +247,31 @@ def generate_admin_password() -> str:
 
 
 def ensure_secret(resource_group: str, server_name: str) -> str:
-    if postgres_server_exists(resource_group, server_name):
-        print("PostgreSQL server exists; reusing the current operator-vault admin secret.", file=sys.stderr)
-        return with_temporary_vault_access(lambda token: key_vault_request("GET", token) or "")
+    server_exists = postgres_server_exists(resource_group, server_name)
 
-    if not ask_yes_no(
-        "No PostgreSQL server exists. Write a new random PostgreSQL admin secret version "
-        "to the operator vault before planning the server?"
-    ):
-        raise SafeError("PostgreSQL admin-secret staging was declined; stopped without changing Key Vault")
-    password = generate_admin_password()
+    def read_or_stage(token: str) -> str:
+        try:
+            existing = key_vault_request("GET", token)
+            if not existing:
+                raise SafeError("The PostgreSQL admin secret is empty; stopped")
+            print("Reusing the current operator-vault PostgreSQL admin secret.", file=sys.stderr)
+            return existing
+        except SecretNotFound:
+            if server_exists:
+                raise SafeError("The PostgreSQL server exists but its admin secret is missing; stopped") from None
+            if not ask_yes_no(
+                "No PostgreSQL server or admin secret exists. Write a new random admin secret version "
+                "to the operator vault before planning the server?"
+            ):
+                raise SafeError("PostgreSQL admin-secret staging was declined; stopped without changing Key Vault") from None
+            password = generate_admin_password()
+            key_vault_request("PUT", token, password)
+            print("Wrote a new PostgreSQL admin secret version; its value will not be displayed.", file=sys.stderr)
+            return password
 
-    def write_secret(token: str) -> str:
-        key_vault_request("PUT", token, password)
-        return password
-
-    print("Writing the new PostgreSQL admin secret to the operator vault; the value will not be displayed.", file=sys.stderr)
-    return with_temporary_vault_access(write_secret)
+    if server_exists:
+        print("PostgreSQL server exists; reading its current operator-vault admin secret.", file=sys.stderr)
+    return with_temporary_vault_access(read_or_stage)
 
 
 def parse_args() -> argparse.Namespace:

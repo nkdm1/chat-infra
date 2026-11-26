@@ -1,11 +1,11 @@
 # Next session plan (recorded 2026-11-25, before sleep)
 
 ## Current state
-- Dev environment is torn down (see `docs/teardown-plan.md`, section 6). The app is offline.
+- The dev environment was previously torn down (see `docs/teardown-plan.md`, section 6); the user then started a rebuild. Their run reached `live/dev/postgresql`, created the private DNS zone and VNet links, then failed creating the B1ms server with Azure `RegionalAllocationFailed`. Inspect Azure and Terraform state before retrying; partial resources/state may remain. Later operator VM/access stacks were not reached in that run.
 - Kept: Web PubSub Free, email/ACS, `websecchatacr`, Cosmos account (no data), operator vault `chat-ops-cf816eae-kv`, `chat-dev-rg`, `chat-shared-rg`, Terraform state backend.
 - One leftover Terraform state entry: `live/dev/workload-federation` (no cost; cannot be read without the deleted AKS outputs).
 - Runbook for rebuild: `docs/runbook-dev-bringup.md`. Non-secret chart values: `deploy/environments/dev/chat-values.yaml`.
-- 2026-11-27 update: the user pushed commit `320e79a` to public `origin/main`; `origin/main` now also contains the approved app-vault teardown-purge change. The soft-deleted dev app vault was purged after explicit user approval. The SSH-key loader (`0ff361e`) and admin-secret workflow are local/unpublished. The user has since created the default key and started `infra-up.sh`; current execution output/resource state has not been reported. Changes to coloring/approval behavior are local and affect only a future invocation. Check Azure/Terraform state before rerunning.
+- 2026-11-27 update: the soft-deleted dev app vault was purged after explicit user approval. The user supplied `~/.ssh/chat-operator.pub` and started `infra-up.sh -y`; PostgreSQL B1ms creation failed with `RegionalAllocationFailed` after its private DNS resources were created. Current resource/state status is not verified. The local follow-up code now adds capacity fallback, temporary-role cleanup after confirmed Ansible success, and operator VM deallocation; publish it before another run.
 
 ## 1. Cost monitoring (ongoing)
 - Latest Cost Analysis shows €3.10 actual cost; this is acceptable. Continue monitoring for the next 24 hours, then review again for delayed charges.
@@ -21,10 +21,10 @@
 
 ## 3. `infra up` / `infra down` scripts
 - [x] Added workstation wrappers that use the active Azure CLI login for local Terragrunt and Azure VM Run Command; no Azure credentials are copied to the VM.
-- [x] `infra up` prints each plan and requires stack-specific approval before apply, then triggers VM-local Ansible. It requires reviewed code on public `main` and renders fresh non-secret Helm values from Terraform outputs.
+- [x] `infra up` prints saved plans, supports stack-level `-y`, tries PostgreSQL SKUs B1ms → B2s → B2ats_v2 on capacity/SKU-availability errors, and triggers VM-local Ansible. After confirmed Ansible success, it destroys temporary operator access grants and deallocates the VM; the next run recreates grants and starts the VM. This lifecycle is unverified against Azure.
 - [x] `infra down` follows the teardown order, preserves shared resources and state, pauses for manual Cloudflare DNS deletion, and requires stack-specific destroy approval. Workload federation is destroyed before AKS to avoid stale Terragrunt dependencies.
-- [x] Added a local Terragrunt password wrapper that generates a cryptographically random PostgreSQL admin password only when Azure reports the server absent, writes a Key Vault secret version through the REST body, temporarily opens/removes the workstation IP rule, and runs Terragrunt with the value only in its child environment. Added mock-based unit tests for generation, reuse, CIDR matching, and firewall-rule cleanup.
-- [ ] Review the password/network code and validate with read-only plans only after publishing it. Unit/syntax tests pass, but no Terragrunt plan/apply/destroy, Key Vault network-rule update/secret write, or Azure VM Run Command has been executed. The user-approved dev app-vault purge was performed separately on 2026-11-27.
+- [x] Added a local Terragrunt password wrapper that reuses an existing operator-vault secret across PostgreSQL capacity retries and generates/writes one only if no secret exists. It temporarily opens/removes the workstation IP rule and supplies the password only in the Terragrunt child environment.
+- [ ] Review and publish the current code, then inspect state before any retry. The user ran a PostgreSQL plan/apply; DNS resources succeeded and server creation failed with regional capacity. The assistant has not run Azure commands or VM Run Command. Key Vault access/secret staging, fallback retries, role cleanup, and VM deallocation remain unverified against Azure.
 
 ## 4. Monitoring (basic)
 - Container Insights / Azure Monitor for AKS: node CPU and memory, pod restarts, node load.

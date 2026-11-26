@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Provision dev infrastructure locally, then trigger VM-local Ansible via Azure Run Command.
-# By default each changing stack is reviewed and approved individually; -y opts into auto-approving all up-stack applies.
+# By default each changing stack is reviewed and approved individually; -y auto-approves up-stack changes and temporary-role cleanup.
 set -euo pipefail
 set +x
 umask 077
@@ -11,6 +11,8 @@ fi
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 EXPECTED_SUBSCRIPTION_ID="cf816eae-f4d9-4db4-bfa6-bda71e2cbf68"
+POSTGRES_RESOURCE_GROUP="chat-dev-rg"
+POSTGRES_SERVER_NAME="chat-dev-cf816eae-se-pg"
 PUBLIC_REPO="https://github.com/nkdm1/chat-infra.git"
 
 stacks=(
@@ -58,7 +60,7 @@ case $# in
   *) fail "Usage: $0 [-y]" ;;
 esac
 if [[ "$auto_approve" == true ]]; then
-  printf 'WARNING: -y will auto-approve every changing listed up-stack, including shared stacks. Plans remain visible, but per-stack review prompts are skipped.\n'
+  printf 'WARNING: -y auto-approves every changing listed up-stack (including shared stacks), PostgreSQL SKU fallbacks, and temporary-role cleanup. Plans remain visible, but review prompts are skipped; fallback SKUs may cost more or have different performance.\n'
 fi
 
 for tool in az terragrunt git python3 base64; do
@@ -123,9 +125,145 @@ confirm_apply() {
   done
 }
 
+get_postgresql_sku_candidates() {
+  local server_json existing_sku server_tier server_state sku_prefix error_file
+  error_file="$tmp_dir/postgresql-sku-query-error"
+  if server_json="$(az postgres flexible-server show \
+    --resource-group "$POSTGRES_RESOURCE_GROUP" \
+    --name "$POSTGRES_SERVER_NAME" \
+    --subscription "$EXPECTED_SUBSCRIPTION_ID" \
+    --query '{sku:sku.name,tier:sku.tier,state:state}' -o json 2>"$error_file")"; then
+    existing_sku="$(python3 -c 'import json,sys; print(json.load(sys.stdin).get("sku") or "")' <<< "$server_json")"
+    server_tier="$(python3 -c 'import json,sys; print(json.load(sys.stdin).get("tier") or "")' <<< "$server_json")"
+    server_state="$(python3 -c 'import json,sys; print(json.load(sys.stdin).get("state") or "")' <<< "$server_json")"
+    case "$server_tier" in
+      Burstable) sku_prefix="B" ;;
+      GeneralPurpose) sku_prefix="GP" ;;
+      MemoryOptimized) sku_prefix="MO" ;;
+      *) fail "Unrecognized PostgreSQL compute tier $server_tier; stopped" ;;
+    esac
+    case "$existing_sku" in
+      Standard_*) existing_sku="${sku_prefix}_${existing_sku}" ;;
+      B_Standard_*|GP_Standard_*|MO_Standard_*) ;;
+      *) fail "Unrecognized PostgreSQL SKU $existing_sku; stopped" ;;
+    esac
+    [[ -n "$server_state" ]] || fail "PostgreSQL server state was empty; stopped"
+    case "$server_state" in
+      Ready|Stopped)
+        # Reuse an existing server's real SKU to avoid planning an unintended resize.
+        printf '%s\n' "$existing_sku"
+        ;;
+      Failed)
+        # A failed prior create must advance past the SKU Azure reports on that resource.
+        case "$existing_sku" in
+          B_Standard_B1ms) printf '%s\n' B_Standard_B2s B_Standard_B2ats_v2 ;;
+          B_Standard_B2s) printf '%s\n' B_Standard_B2ats_v2 ;;
+          B_Standard_B2ats_v2) fail "All configured PostgreSQL SKUs were already attempted; inspect Azure state before retrying" ;;
+          *) fail "PostgreSQL is in Failed state with unrecognized SKU $existing_sku; inspect Azure before retrying" ;;
+        esac
+        ;;
+      *) fail "PostgreSQL server is in state $server_state; wait or inspect it before planning" ;;
+    esac
+  elif grep -Eqi 'ResourceNotFound|was not found|could not be found' "$error_file"; then
+    printf '%s\n' B_Standard_B1ms B_Standard_B2s B_Standard_B2ats_v2
+  else
+    cat "$error_file" >&2
+    fail "Could not determine the PostgreSQL server SKU; stopped before planning it"
+  fi
+}
+
+apply_postgresql_with_capacity_fallback() {
+  local stack="live/dev/postgresql" stack_dir="$ROOT/live/dev/postgresql"
+  local candidates_output sku plan_output plan_file apply_output
+  local -a candidates=()
+  candidates_output="$(get_postgresql_sku_candidates)" || fail "Could not select PostgreSQL SKU candidates"
+  while IFS= read -r sku; do
+    [[ -n "$sku" ]] && candidates+=("$sku")
+  done <<< "$candidates_output"
+  ((${#candidates[@]} > 0)) || fail "No PostgreSQL SKU candidates were selected"
+
+  for sku in "${candidates[@]}"; do
+    printf '\n========== Terragrunt plan: %s (SKU %s) ==========\n' "$stack" "$sku"
+    plan_output="$tmp_dir/postgresql-${sku}-plan-output"
+    plan_file="$tmp_dir/postgresql-${sku}.tfplan"
+    apply_output="$tmp_dir/postgresql-${sku}-apply-output"
+    if ! (cd "$stack_dir" && export POSTGRESQL_SKU="$sku" && run_terragrunt ensure "$stack" plan "-out=$plan_file") 2>&1 | tee "$plan_output"; then
+      fail "PostgreSQL plan failed for SKU $sku; stopped without applying it"
+    fi
+    if grep -Eq 'No changes\.' "$plan_output"; then
+      printf 'No changes for PostgreSQL SKU %s; skipping apply.\n' "$sku"
+      return 0
+    fi
+    printf 'The reviewed binary plan is stored temporarily with owner-only permissions.\n'
+    if [[ "$auto_approve" == true ]]; then
+      printf 'Auto-approving the saved PostgreSQL plan for SKU %s due to -y.\n' "$sku"
+    else
+      confirm_apply "$stack (SKU $sku)"
+    fi
+    if (cd "$stack_dir" && export POSTGRESQL_SKU="$sku" && run_terragrunt read "$stack" apply "$plan_file") 2>&1 | tee "$apply_output"; then
+      return 0
+    fi
+    if grep -Eiq 'RegionalAllocationFailed|SkuNotAvailable|InvalidSkuName|SKU[^[:alnum:]]+not available' "$apply_output"; then
+      printf 'Azure could not allocate PostgreSQL SKU %s; retrying with the next configured SKU if available.\n' "$sku" >&2
+      continue
+    fi
+    fail "PostgreSQL apply for SKU $sku failed for a non-capacity reason; stopped"
+  done
+  fail "PostgreSQL capacity failed for every configured SKU: ${candidates[*]}"
+}
+
+confirm_operator_access_cleanup() {
+  local stack="$1" approval
+  [[ -t 0 ]] || fail "Temporary role cleanup approval for $stack requires an interactive terminal"
+  while true; do
+    printf 'Remove temporary operator access for %s now that Ansible succeeded? [Y/n] ' "$stack"
+    IFS= read -r approval || fail "No cleanup approval received for $stack; operator VM remains running"
+    case "$approval" in
+      ""|Y|y|yes|YES|Yes) return 0 ;;
+      N|n|NO|no|No) fail "Cleanup declined for $stack; operator VM remains running with temporary access" ;;
+      *) printf 'Please answer Y or n.\n' ;;
+    esac
+  done
+}
+
+remove_temporary_operator_access() {
+  local stack stack_dir plan_output plan_file
+  local -a access_stacks=(
+    live/dev/operator-aks-access
+    live/dev/operator-secret-access
+    live/dev/operator-redis-access
+    live/dev/operator-vault-access
+  )
+  printf '\nRemoving temporary operator permissions after verified Ansible success.\n'
+  for stack in "${access_stacks[@]}"; do
+    stack_dir="$ROOT/$stack"
+    plan_output="$tmp_dir/cleanup-${stack//\//_}-plan-output"
+    plan_file="$tmp_dir/cleanup-${stack//\//_}.tfplan"
+    printf '\n========== Temporary-access destroy plan: %s ==========\n' "$stack"
+    if ! (cd "$stack_dir" && run_terragrunt read "$stack" plan -destroy "-out=$plan_file") 2>&1 | tee "$plan_output"; then
+      fail "Temporary-access destroy plan failed for $stack; VM remains running"
+    fi
+    if grep -Eq 'No changes\.' "$plan_output"; then
+      printf 'No temporary access resources remain in %s.\n' "$stack"
+      continue
+    fi
+    printf 'The exact temporary-access destroy plan is saved owner-only.\n'
+    if [[ "$auto_approve" == true ]]; then
+      printf 'Auto-approving temporary-access cleanup for %s due to -y.\n' "$stack"
+    else
+      confirm_operator_access_cleanup "$stack"
+    fi
+    (cd "$stack_dir" && run_terragrunt read "$stack" apply "$plan_file") || fail "Could not remove temporary access in $stack; VM remains running"
+  done
+}
+
 for stack in "${stacks[@]}"; do
   stack_dir="$ROOT/$stack"
   [[ -f "$stack_dir/terragrunt.hcl" ]] || fail "Missing stack configuration: $stack"
+  if [[ "$stack" == "live/dev/postgresql" ]]; then
+    apply_postgresql_with_capacity_fallback
+    continue
+  fi
   printf '\n========== Terragrunt plan: %s ==========\n' "$stack"
   plan_output="$tmp_dir/plan-output"
   plan_file="$tmp_dir/${stack//\//_}.tfplan"
@@ -172,6 +310,7 @@ export AZURE_TENANT_ID="$(az account show --query tenantId -o tsv)"
 export OPERATOR_KEY_VAULT_NAME="chat-ops-cf816eae-kv"
 
 CHAT_VALUES_YAML="$(python3 "$ROOT/scripts/render_dev_values.py")" || fail "Could not render non-secret Helm values"
+export CHAT_VALUES_YAML
 [[ -n "$REDIS_ENTERPRISE_NAME" && "$REDIS_ENTERPRISE_NAME" != "$redis_id" ]] || fail "Could not parse Redis resource name"
 
 config_file="$tmp_dir/operator-config.json"
@@ -198,10 +337,29 @@ Path(sys.argv[2]).write_text(source.replace(marker, sys.argv[3]), encoding="utf-
 PY
 chmod 0600 "$remote_script"
 
+operator_power_state="$(az vm show --show-details --resource-group "$DEV_RESOURCE_GROUP" --name "chat-dev-operator" --query powerState -o tsv)" || fail "Could not inspect operator VM power state"
+if [[ "$operator_power_state" != "VM running" ]]; then
+  printf 'Starting the deallocated operator VM before Azure Run Command.\n'
+  az vm start --resource-group "$DEV_RESOURCE_GROUP" --name "chat-dev-operator" || fail "Could not start the operator VM"
+fi
+
 printf '\nAll infrastructure stacks are ready. Triggering Ansible on the operator VM via Azure Run Command.\n'
-az vm run-command invoke \
+run_command_output="$tmp_dir/operator-run-command.json"
+if ! az vm run-command invoke \
   --resource-group "$DEV_RESOURCE_GROUP" \
   --name "chat-dev-operator" \
   --command-id RunShellScript \
   --scripts "@$remote_script" \
-  --output json
+  --output json >"$run_command_output"; then
+  cat "$run_command_output" >&2
+  fail "Azure Run Command invocation failed; temporary roles and running VM are retained for troubleshooting"
+fi
+cat "$run_command_output"
+grep -Fq 'CHAT_ANSIBLE_SUCCESS_MARKER' "$run_command_output" || fail "Ansible success was not confirmed by the VM; temporary roles and running VM are retained"
+printf 'Ansible success marker received; removing temporary access grants.\n'
+remove_temporary_operator_access
+
+az vm deallocate --resource-group "$DEV_RESOURCE_GROUP" --name "chat-dev-operator" || fail "Temporary roles were removed, but the operator VM could not be deallocated"
+operator_power_state="$(az vm show --show-details --resource-group "$DEV_RESOURCE_GROUP" --name "chat-dev-operator" --query powerState -o tsv)" || fail "Could not verify operator VM power state after deallocation"
+[[ "$operator_power_state" == "VM deallocated" ]] || fail "Operator VM did not reach the deallocated state (reported: $operator_power_state)"
+printf 'Temporary operator grants removed and operator VM deallocated. Azure Bastion Developer remains provisioned.\n'

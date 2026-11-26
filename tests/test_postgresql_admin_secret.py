@@ -57,23 +57,39 @@ class AdminSecretTests(unittest.TestCase):
             mock.patch.object(MODULE, "postgres_server_exists", return_value=False),
             mock.patch.object(MODULE, "ask_yes_no", return_value=True),
             mock.patch.object(MODULE, "with_temporary_vault_access", side_effect=lambda operation: operation("token")),
-            mock.patch.object(MODULE, "key_vault_request", return_value=None) as request,
+            mock.patch.object(MODULE, "key_vault_request", side_effect=[MODULE.SecretNotFound("missing"), None]) as request,
             contextlib.redirect_stderr(io.StringIO()) as stderr,
         ):
             value = MODULE.ensure_secret("chat-dev-rg", "chat-dev-cf816eae-se-pg")
 
-        request.assert_called_once_with("PUT", "token", value)
+        self.assertEqual(request.call_args_list[0].args, ("GET", "token"))
+        self.assertEqual(request.call_args_list[1].args, ("PUT", "token", value))
         self.assertNotIn(value, stderr.getvalue())
 
     def test_new_server_decline_does_not_write_secret(self):
         with (
             mock.patch.object(MODULE, "postgres_server_exists", return_value=False),
             mock.patch.object(MODULE, "ask_yes_no", return_value=False),
-            mock.patch.object(MODULE, "key_vault_request") as request,
+            mock.patch.object(MODULE, "with_temporary_vault_access", side_effect=lambda operation: operation("token")),
+            mock.patch.object(MODULE, "key_vault_request", side_effect=MODULE.SecretNotFound("missing")) as request,
         ):
             with self.assertRaises(MODULE.SafeError):
                 MODULE.ensure_secret("chat-dev-rg", "chat-dev-cf816eae-se-pg")
-        request.assert_not_called()
+        request.assert_called_once_with("GET", "token")
+
+    def test_missing_server_reuses_staged_secret_on_retry(self):
+        with (
+            mock.patch.object(MODULE, "postgres_server_exists", return_value=False),
+            mock.patch.object(MODULE, "ask_yes_no") as ask,
+            mock.patch.object(MODULE, "with_temporary_vault_access", side_effect=lambda operation: operation("token")),
+            mock.patch.object(MODULE, "key_vault_request", return_value="already-staged") as request,
+            contextlib.redirect_stderr(io.StringIO()),
+        ):
+            value = MODULE.ensure_secret("chat-dev-rg", "chat-dev-cf816eae-se-pg")
+
+        self.assertEqual(value, "already-staged")
+        request.assert_called_once_with("GET", "token")
+        ask.assert_not_called()
 
     def test_existing_server_reuses_secret_without_writing(self):
         with (
