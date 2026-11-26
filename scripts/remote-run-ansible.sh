@@ -3,8 +3,11 @@
 # CONFIG_B64 contains non-secret resource metadata and non-secret Helm values.
 set -euo pipefail
 
-if ! cloud-init status --wait >/dev/null 2>&1; then
-  echo "Operator VM bootstrap did not complete successfully." >&2
+if ! timeout 10m cloud-init status --wait >/dev/null 2>&1; then
+  echo "Operator VM bootstrap did not complete successfully; cloud-init diagnostics follow." >&2
+  cloud-init status --long 2>&1 || true
+  grep -Ei 'curl:|gpg:|error:|failed|traceback|returned non-zero|runcmd' /var/log/cloud-init-output.log | tail -n 40 >&2 || true
+  grep -Ei 'curl:|gpg:|error:|failed|traceback|returned non-zero|runcmd' /var/log/cloud-init.log | tail -n 60 >&2 || true
   exit 1
 fi
 

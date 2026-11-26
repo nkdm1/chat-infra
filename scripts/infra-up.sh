@@ -356,7 +356,12 @@ if ! az vm run-command invoke \
   fail "Azure Run Command invocation failed; temporary roles and running VM are retained for troubleshooting"
 fi
 cat "$run_command_output"
-grep -Fq 'CHAT_ANSIBLE_SUCCESS_MARKER' "$run_command_output" || fail "Ansible success was not confirmed by the VM; temporary roles and running VM are retained"
+if ! grep -Fq 'CHAT_ANSIBLE_SUCCESS_MARKER' "$run_command_output"; then
+  printf '\nAnsible success was not confirmed; fetching safe operator-host diagnostics via Azure Run Command.\n' >&2
+  diagnostic_script='cloud-init status --long 2>&1 || true; echo "--- cloud-init output errors ---"; grep -Ei "curl:|gpg:|error:|failed|traceback|returned non-zero|runcmd" /var/log/cloud-init-output.log | tail -n 40 || true; echo "--- cloud-init log errors ---"; grep -Ei "curl:|gpg:|error:|failed|traceback|returned non-zero|runcmd" /var/log/cloud-init.log | tail -n 60 || true'
+  az vm run-command invoke --resource-group "$DEV_RESOURCE_GROUP" --name "chat-dev-operator" --command-id RunShellScript --scripts "$diagnostic_script" --output json || printf 'Could not fetch operator-host diagnostics.\n' >&2
+  fail "Ansible success was not confirmed by the VM; temporary roles and running VM are retained"
+fi
 printf 'Ansible success marker received; removing temporary access grants.\n'
 remove_temporary_operator_access
 
