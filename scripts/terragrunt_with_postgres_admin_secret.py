@@ -44,14 +44,18 @@ def run_az(args: list[str]) -> subprocess.CompletedProcess[str]:
     )
 
 
-def ask_exact(prompt: str, expected: str) -> None:
-    print(prompt, file=sys.stderr, flush=True)
-    try:
-        response = input("> ")
-    except EOFError as exc:
-        raise SafeError("Interactive confirmation was not available; stopped") from exc
-    if response != expected:
-        raise SafeError("Confirmation not received; stopped without changing Key Vault")
+def ask_yes_no(prompt: str) -> bool:
+    while True:
+        print(f"{prompt} [Y/n] ", end="", file=sys.stderr, flush=True)
+        try:
+            response = input().strip().lower()
+        except EOFError as exc:
+            raise SafeError("Interactive confirmation was not available; stopped") from exc
+        if response in ("", "y", "yes"):
+            return True
+        if response in ("n", "no"):
+            return False
+        print("Please answer Y or n.", file=sys.stderr, flush=True)
 
 
 def postgres_server_exists(resource_group: str, server_name: str) -> bool:
@@ -175,12 +179,10 @@ def with_temporary_vault_access(operation: Callable[[str], str]) -> str:
         raise SafeError("Operator-vault public network access is disabled; cannot use a workstation IP rule")
 
     needs_rule = default_action.lower() == "deny" and not is_ip_allowed(ip, rules)
-    if needs_rule:
-        ask_exact(
-            f"This will temporarily allow workstation IP {ip} to access the operator vault. "
-            f"Type exactly 'allow operator vault {ip}' to proceed.",
-            f"allow operator vault {ip}",
-        )
+    if needs_rule and not ask_yes_no(
+        f"Temporarily allow workstation IP {ip} to access the operator vault?"
+    ):
+        raise SafeError("Temporary operator-vault IP access was declined; stopped")
 
     added_rule = False
     result_value: str | None = None
@@ -245,12 +247,11 @@ def ensure_secret(resource_group: str, server_name: str) -> str:
         print("PostgreSQL server exists; reusing the current operator-vault admin secret.", file=sys.stderr)
         return with_temporary_vault_access(lambda token: key_vault_request("GET", token) or "")
 
-    ask_exact(
-        "No PostgreSQL server exists. A new cryptographically random admin secret will be written "
-        "as a new operator-vault secret version before the server plan. "
-        "Type exactly 'stage dev PostgreSQL admin secret' to proceed.",
-        "stage dev PostgreSQL admin secret",
-    )
+    if not ask_yes_no(
+        "No PostgreSQL server exists. Write a new random PostgreSQL admin secret version "
+        "to the operator vault before planning the server?"
+    ):
+        raise SafeError("PostgreSQL admin-secret staging was declined; stopped without changing Key Vault")
     password = generate_admin_password()
 
     def write_secret(token: str) -> str:
